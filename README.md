@@ -29,10 +29,10 @@ FastAPI energy dashboard for combining Growatt battery data, GoodWe solar data, 
 3. Run the app locally:
 
    ```bash
-   uvicorn app.main:app --reload
+   uvicorn app.main:app --reload --port 8003
    ```
 
-4. Open [http://localhost:8000](http://localhost:8000).
+4. Open [http://localhost:8003](http://localhost:8003).
 
 ## Provider setup
 
