@@ -2,20 +2,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.config import Settings, get_settings
 from app.services.dashboard import build_dashboard_data
+from app.services.tesla_keys import WELL_KNOWN_TESLA_PUBLIC_KEY_PATH, ensure_tesla_keypair, get_public_key_path
 from app.services.automation_state import GlobalAutomationPayload, ManualChargePayload, RuleTogglePayload, update_global_automation, update_manual_charge, update_rule
 from app.services.tesla_oauth import (
     TeslaOAuthError,
     build_authorize_url,
+    build_pairing_url,
     build_state,
     clear_tokens,
     exchange_code_for_token,
+    get_public_key_url,
     is_tesla_oauth_configured,
     load_saved_tokens,
 )
@@ -39,6 +43,8 @@ async def dashboard_page(request: Request, settings: Settings = Depends(get_sett
             "initial_data": data.model_dump(mode="json"),
             "tesla_oauth_enabled": is_tesla_oauth_configured(settings),
             "tesla_connected": bool(settings.tesla_access_token or load_saved_tokens(settings)),
+            "tesla_pairing_url": build_pairing_url(settings),
+            "tesla_public_key_url": get_public_key_url(settings),
         },
     )
 
@@ -116,3 +122,23 @@ async def tesla_logout():
     settings = get_settings()
     clear_tokens(settings)
     return RedirectResponse(url="/")
+
+
+@app.get("/auth/tesla/pair")
+async def tesla_pair(settings: Settings = Depends(get_settings)):
+    pairing_url = build_pairing_url(settings)
+    if not pairing_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Tesla partner domain is not configured. Set TESLA_PARTNER_DOMAIN first.",
+        )
+    return RedirectResponse(url=pairing_url)
+
+
+@app.get(WELL_KNOWN_TESLA_PUBLIC_KEY_PATH, response_class=PlainTextResponse)
+async def tesla_public_key(settings: Settings = Depends(get_settings)):
+    ensure_tesla_keypair(settings)
+    public_key_path = get_public_key_path(settings)
+    if not public_key_path.exists():
+        raise HTTPException(status_code=404, detail="Tesla public key is not available.")
+    return public_key_path.read_text(encoding="utf-8")

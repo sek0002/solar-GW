@@ -7,7 +7,7 @@ import httpx
 
 from app.config import Settings, parse_csv
 from app.providers.base import ProviderSnapshot
-from app.services.tesla_oauth import get_valid_access_token
+from app.services.tesla_oauth import build_pairing_url, get_public_key_url, get_valid_access_token
 
 
 def _series_key(name: str, suffix: str) -> str:
@@ -42,13 +42,26 @@ async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Setti
     active_sessions = 0
     notes: list[str] = []
     any_vehicle_visible = False
+    vehicle_lookup_errors: list[str] = []
+    pairing_url = build_pairing_url(settings)
+    public_key_url = get_public_key_url(settings)
 
     for vin in vins:
-        meta_payload = await _get_json(
-            client,
-            f"{settings.tesla_api_base_url}/api/1/vehicles/{vin}",
-            token,
-        )
+        try:
+            meta_payload = await _get_json(
+                client,
+                f"{settings.tesla_api_base_url}/api/1/vehicles/{vin}",
+                token,
+            )
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            if status_code == 412:
+                vehicle_lookup_errors.append(
+                    f"Tesla denied vehicle access for {vin}. OAuth succeeded, but this vehicle still needs third-party app authorization or virtual-key pairing."
+                )
+            else:
+                vehicle_lookup_errors.append(f"Tesla vehicle lookup failed for {vin} with HTTP {status_code}.")
+            continue
         meta = meta_payload.get("response", {})
         any_vehicle_visible = True
         vehicle_name = meta.get("display_name") or vin[-6:]
@@ -163,6 +176,50 @@ async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Setti
     elif any_vehicle_visible:
         charger_status = "Disconnected"
 
+    if not any_vehicle_visible and vehicle_lookup_errors:
+        detail = "Tesla OAuth completed, but vehicle access is blocked until the app is authorized on each vehicle."
+        if pairing_url:
+            detail = "Tesla OAuth completed, but vehicle access is blocked until the Tesla app key is paired with each vehicle."
+        notes.extend(vehicle_lookup_errors)
+        if pairing_url:
+            notes.append(f"Pair the Tesla app key from: {pairing_url}")
+        else:
+            notes.append("Set TESLA_PARTNER_DOMAIN to generate a Tesla mobile-app key pairing link.")
+        if public_key_url:
+            notes.append(f"Tesla public key should be hosted at: {public_key_url}")
+        notes.append(
+            "Some vehicles also require 'Allow Third-Party App Data Streaming' to be enabled in the vehicle Safety settings."
+        )
+        return ProviderSnapshot(
+            name="Tesla Charging",
+            kind="hybrid",
+            status="degraded",
+            detail=detail,
+            chargers=[
+                {
+                    "name": settings.wall_connector_name,
+                    "source": "Tesla Charging",
+                    "status": "Disconnected",
+                    "active_sessions": 0,
+                    "connected_vehicles": 0,
+                    "power_kw": 0.0,
+                    "max_power_kw": settings.wall_connector_max_kw,
+                    "circuit_amps": settings.wall_connector_circuit_amps,
+                    "location": settings.wall_connector_location,
+                    "vehicle_names": [],
+                }
+            ],
+            metrics=[
+                {
+                    "label": settings.wall_connector_name,
+                    "value": 0.0,
+                    "unit": "kW",
+                    "tone": "neutral",
+                }
+            ],
+            notes=notes,
+        )
+
     return ProviderSnapshot(
         name="Tesla Charging",
         kind="hybrid",
@@ -215,6 +272,7 @@ async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Setti
         notes=[
             "Wall Connector status is inferred from Tesla vehicle state and charge data.",
             "Tesla recommends Fleet Telemetry for efficient live monitoring instead of frequent vehicle_data polling.",
+            *(["Tesla pairing link available in the app header."] if pairing_url else []),
             *notes,
         ],
     )

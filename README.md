@@ -50,6 +50,11 @@ For the OAuth flow, set:
 - `TESLA_REDIRECT_URI`
 - `TESLA_SCOPE`
 - `TESLA_TOKEN_STORE_PATH`
+- `TESLA_PARTNER_DOMAIN`
+- `TESLA_PUBLIC_KEY_URL` (optional override; otherwise derived from the partner domain)
+- `TESLA_PUBLIC_KEY_PATH`
+- `TESLA_PRIVATE_KEY_PATH`
+- `TESLA_AUTO_GENERATE_KEYS`
 - `TESLA_VEHICLE_VINS`
 - `WALL_CONNECTOR_NAME`
 - `WALL_CONNECTOR_LOCATION`
@@ -57,6 +62,8 @@ For the OAuth flow, set:
 - `WALL_CONNECTOR_CIRCUIT_AMPS`
 
 Then open `/auth/tesla/login` or click the dashboard connect button.
+If Tesla vehicle access is still blocked after OAuth, use the dashboard's `Pair Tesla Key` action to open Tesla's mobile-app pairing flow for the configured partner domain.
+When running locally, the app can auto-generate a Tesla EC keypair and serve the expected public-key path from the same host as `TESLA_REDIRECT_URI`.
 
 For the manual token flow, set:
 
@@ -74,6 +81,7 @@ The implementation uses Tesla Fleet API OAuth endpoints and vehicle data:
 - `GET /api/1/vehicles/{vin}/vehicle_data`
 
 Tesla’s official Fleet API docs expose vehicle charging state and recommend Fleet Telemetry for efficient realtime monitoring. I did not find an official standalone Wall Connector device endpoint in the Fleet API docs, so the dashboard models charger sessions from vehicle charge state instead.
+Vehicle-level data access may still require Tesla virtual-key pairing and, on some vehicles, enabling `Allow Third-Party App Data Streaming`.
 
 ### Growatt
 

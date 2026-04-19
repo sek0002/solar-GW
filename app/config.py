@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     tesla_access_token: str | None = None
     tesla_vehicle_vins: str = ""
     tesla_token_store_path: str = ".data/tesla_oauth.json"
+    tesla_partner_domain: str | None = None
+    tesla_public_key_url: str | None = None
+    tesla_public_key_path: str = ".data/tesla/public-key.pem"
+    tesla_private_key_path: str = ".data/tesla/private-key.pem"
+    tesla_auto_generate_keys: bool = True
     wall_connector_name: str = "Wall Connector 3"
     wall_connector_location: str = "Garage"
     wall_connector_max_kw: float = 11.0
