@@ -187,23 +187,25 @@ async def load_growatt_snapshot(settings: Settings) -> ProviderSnapshot | None:
                         )
                     )
                 ]
-                battery_points = []
+                battery_charge_points = []
+                battery_discharge_points = []
                 for row in ordered_rows:
                     discharge = _as_float(getattr(row, "pdischarge1", None)) or 0.0
                     charge = _as_float(getattr(row, "pcharge1", None)) or 0.0
-                    state = "idle"
-                    if discharge > charge and discharge > 0:
-                        state = "discharge"
-                    elif charge > discharge and charge > 0:
-                        state = "charge"
-                    point = _series_point(
+                    discharge_point = _series_point(
                         getattr(row, "time", None),
-                        max(discharge, charge),
+                        discharge if discharge > 0 else None,
                         scale=1000.0,
-                        state=state,
                     )
-                    if point:
-                        battery_points.append(point)
+                    charge_point = _series_point(
+                        getattr(row, "time", None),
+                        charge if charge > 0 else None,
+                        scale=1000.0,
+                    )
+                    if discharge_point:
+                        battery_discharge_points.append(discharge_point)
+                    if charge_point:
+                        battery_charge_points.append(charge_point)
 
                 if load_points:
                     latest_load_kw = load_points[-1]["value"] or 0.0
@@ -228,16 +230,28 @@ async def load_growatt_snapshot(settings: Settings) -> ProviderSnapshot | None:
                             "points": soc_points[-240:],
                         }
                     )
-                if battery_points:
-                    latest_battery_power_kw = battery_points[-1]["value"] or 0.0
+                if battery_charge_points or battery_discharge_points:
+                    latest_charge_kw = battery_charge_points[-1]["value"] if battery_charge_points else 0.0
+                    latest_discharge_kw = battery_discharge_points[-1]["value"] if battery_discharge_points else 0.0
+                    latest_battery_power_kw = (latest_discharge_kw or 0.0) or (latest_charge_kw or 0.0)
                     chart_series.append(
                         {
-                            "key": "growatt_battery_kw",
-                            "label": "Growatt battery charge/discharge",
+                            "key": "growatt_battery_charge_kw",
+                            "label": "Growatt battery charge",
                             "unit": "kW",
-                            "color": "#c89bff",
+                            "color": "#4cc9f0",
                             "axis": "power",
-                            "points": battery_points[-240:],
+                            "points": battery_charge_points[-240:],
+                        }
+                    )
+                    chart_series.append(
+                        {
+                            "key": "growatt_battery_discharge_kw",
+                            "label": "Growatt battery discharge",
+                            "unit": "kW",
+                            "color": "#ff9cf0",
+                            "axis": "power",
+                            "points": battery_discharge_points[-240:],
                         }
                     )
             else:

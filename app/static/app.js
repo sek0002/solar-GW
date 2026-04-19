@@ -6,8 +6,8 @@ let energyChart = null;
 let vehicleChart = null;
 let activeEnergyChartKey = null;
 let activeVehicleChartKey = null;
-let energyChartWindowHours = 24;
-let vehicleChartWindowHours = 24;
+let energyChartWindowHours = 6;
+let vehicleChartWindowHours = 6;
 let automationPanelOpen = false;
 
 function formatValue(value, unit = "") {
@@ -484,23 +484,6 @@ function buildChartState(filterFn, activeKey, hours) {
         state: point?.state || null,
       }))
       .filter((point) => point.x >= windowStart && point.x <= windowEnd);
-    const segmentModeColor =
-      series.key === "growatt_battery_kw"
-        ? (ctx) => {
-            const point = data[ctx.p0DataIndex];
-            const mode = point?.state;
-            if (!highlighted) {
-              return hexToRgba(series.color, 0.25);
-            }
-            if (mode === "charge") {
-              return "#4cc9f0";
-            }
-            if (mode === "discharge") {
-              return "#ff9cf0";
-            }
-            return series.color;
-          }
-        : undefined;
     return {
       label: series.label,
       key: series.key,
@@ -515,7 +498,6 @@ function buildChartState(filterFn, activeKey, hours) {
       borderWidth: highlighted ? 2.4 : 1.3,
       tension: 0.28,
       fill: false,
-      segment: segmentModeColor ? { borderColor: segmentModeColor } : undefined,
     };
   });
 
