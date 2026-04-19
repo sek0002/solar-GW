@@ -1,0 +1,63 @@
+Metadata-Version: 2.4
+Name: pygoodwe
+Version: 0.1.10
+Summary: A command line tool and python library to query the GOODWE SEMS Portal APIs.
+Project-URL: documentation, https://yaleman.github.io/pygoodwe/
+Project-URL: homepage, https://github.com/yaleman/pygoodwe
+Project-URL: repository, https://github.com/yaleman/pygoodwe
+Project-URL: bug tracker, https://github.com/yaleman/pygoodwe/issues
+Author-email: James Hodgkinson <james@terminaloutcomes.com>
+License-Expression: MIT
+License-File: LICENSE
+Keywords: api,goodwe,pygoodwe,solar
+Classifier: Development Status :: 4 - Beta
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Requires-Python: <4.0,>=3.9
+Requires-Dist: requests<3.0.0,>=2.28.1
+Description-Content-Type: text/markdown
+
+
+# pygoodwe
+
+A command line tool and python library to query the GOODWE SEMS Portal APIs.
+
+## API Docs
+
+Auto-generated documentation is here: <https://yaleman.github.io/pygoodwe/>
+
+## Installation
+
+You need to have Python 3 and pip installed. Then:
+
+    python -m pip install pygoodwe
+
+Determine the Station ID from the GOODWE site as follows. Open the [Sems Portal](https://www.semsportal.com). The Plant Status will reveal the Station ID in the URL. Example:
+
+    https://www.semsportal.com/powerstation/powerstatussnmin/11112222-aaaa-bbbb-cccc-ddddeeeeeffff
+
+Then the Station ID is `11112222-aaaa-bbbb-cccc-ddddeeeeeffff`.
+
+To use example.py or the other examples, copy config.py.example to config.py and add your details.
+
+## Contributions
+
+Please feel free to lodge an [issue or pull request on GitHub](https://github.com/yaleman/pygoodwe/issues).
+
+## Thanks
+
+* Originally based off the work of [Mark Ruys and his gw2pvo software](https://github.com/markruys/gw2pvo) - I needed something more flexible, so I made this.
+
+## Disclaimer
+
+GOODWE access is based on the undocumented API used by mobile apps. This could break at any time.
+
+## Example Code
+
+Please check out example.py or the examples folder in [the project repository](https://github.com/yaleman/pygoodwe) for some simple example code.

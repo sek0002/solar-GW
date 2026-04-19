@@ -1,0 +1,21 @@
+{
+  "global_enabled": true,
+  "rules": {
+    "off_peak_midday": {
+      "enabled": true
+    },
+    "solar_match": {
+      "enabled": true
+    },
+    "battery_floor_pause": {
+      "enabled": true
+    },
+    "night_trickle": {
+      "enabled": true
+    }
+  },
+  "manual_charge": {
+    "enabled": false,
+    "target_amps": 7
+  }
+}

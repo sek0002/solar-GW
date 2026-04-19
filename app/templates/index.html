@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ settings.dashboard_title }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}" />
+  </head>
+  <body data-refresh="{{ settings.refresh_interval_seconds }}">
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Distributed Energy Dashboard</p>
+          <h1>{{ settings.dashboard_title }}</h1>
+        </div>
+        <div class="topbar-side">
+          <div class="header-actions">
+            {% if tesla_oauth_enabled %}
+            <a class="auth-link" href="{% if tesla_connected %}/auth/tesla/logout{% else %}/auth/tesla/login{% endif %}">
+              {% if tesla_connected %}Disconnect Tesla{% else %}Connect Tesla{% endif %}
+            </a>
+            {% endif %}
+          </div>
+        </div>
+      </header>
+      <div class="provider-strip">
+        <div class="status-chip">
+          <span class="status-dot"></span>
+          <span id="updated-at">Waiting for first sync</span>
+        </div>
+        <div class="provider-strip-icons" id="provider-strip"></div>
+      </div>
+      <section class="control-strip">
+        <article class="control-tile">
+          <div class="control-tile-head">
+            <button class="icon-button" id="automation-toggle" type="button" aria-expanded="false">Auto</button>
+            <label class="switch">
+              <input id="automation-global-enabled" type="checkbox" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <strong id="automation-icon-title">Automation paused</strong>
+          <p id="automation-icon-detail">Combined automation toggle is off.</p>
+        </article>
+        <article class="control-tile">
+          <div class="control-tile-head">
+            <button class="icon-button" id="charge-toggle" type="button" aria-expanded="false">Charge</button>
+            <label class="switch">
+              <input id="manual-charge-enabled" type="checkbox" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <strong id="manual-charge-title">Manual charge off</strong>
+          <p id="manual-charge-detail">Set combined amps between 2A and 30A.</p>
+          <div class="manual-charge-inline">
+            <div class="manual-charge-readout manual-charge-readout-compact">
+              <strong id="manual-charge-amps">10A</strong>
+              <span id="manual-charge-kw">2.30 kW</span>
+            </div>
+            <input id="manual-charge-slider" type="range" min="2" max="30" step="1" value="10" />
+          </div>
+        </article>
+        <article class="control-tile battery-tile">
+          <div class="control-tile-head">
+            <strong>Battery</strong>
+          </div>
+          <div class="battery-rail" id="battery-rail"></div>
+        </article>
+      </section>
+      <section class="automation-panel" id="automation-panel" hidden>
+        <div class="automation-head">
+          <div>
+            <p class="eyebrow">Automation Control</p>
+            <h3 id="automation-mode">Idle</h3>
+          </div>
+          <p class="automation-detail" id="automation-detail">Automation waiting for an active rule.</p>
+        </div>
+        <div class="automation-card-head automation-card-head-flat">
+          <h4>Rules</h4>
+          <span class="automation-outcome" id="automation-target">No target</span>
+        </div>
+        <div class="automation-rule-list" id="automation-rules"></div>
+      </section>
+
+      <main class="grid">
+        <section class="panel panel-wide chart-panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Absolute API Readout</p>
+              <h3>Energy traces</h3>
+            </div>
+            <div class="chart-window-controls">
+              <div class="chart-window-presets" id="chart-window-presets">
+                <button class="window-chip" type="button" data-chart-target="energy" data-hours="6">6h</button>
+                <button class="window-chip" type="button" data-chart-target="energy" data-hours="12">12h</button>
+                <button class="window-chip" type="button" data-chart-target="energy" data-hours="24">24h</button>
+                <button class="window-chip" type="button" data-chart-target="energy" data-hours="48">48h</button>
+              </div>
+              <div class="chart-window-custom">
+                <input id="chart-window-range" type="range" min="1" max="72" step="1" value="24" />
+                <label class="chart-window-label">
+                  <span>Hours</span>
+                  <input id="chart-window-input" type="number" min="1" max="168" step="1" value="24" />
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="chart-legend" id="chart-legend"></div>
+          <div class="chart-stage">
+            <canvas id="energy-chart" aria-label="Live energy traces chart"></canvas>
+          </div>
+        </section>
+        <section class="panel panel-wide chart-panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Tesla Fleet Readout</p>
+              <h3>Vehicle SoC and charge rate</h3>
+            </div>
+            <div class="chart-window-controls">
+              <div class="chart-window-presets">
+                <button class="window-chip" type="button" data-chart-target="vehicle" data-hours="6">6h</button>
+                <button class="window-chip" type="button" data-chart-target="vehicle" data-hours="12">12h</button>
+                <button class="window-chip" type="button" data-chart-target="vehicle" data-hours="24">24h</button>
+                <button class="window-chip" type="button" data-chart-target="vehicle" data-hours="48">48h</button>
+              </div>
+              <div class="chart-window-custom">
+                <input id="vehicle-chart-window-range" type="range" min="1" max="72" step="1" value="24" />
+                <label class="chart-window-label">
+                  <span>Hours</span>
+                  <input id="vehicle-chart-window-input" type="number" min="1" max="168" step="1" value="24" />
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="chart-legend" id="vehicle-chart-legend"></div>
+          <div class="chart-stage">
+            <canvas id="vehicle-chart" aria-label="Live Tesla vehicle chart"></canvas>
+          </div>
+        </section>
+        <section class="panel panel-full systems-panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Connected Systems</p>
+              <h3>Charging, storage, plants, and vehicles</h3>
+            </div>
+          </div>
+          <div class="systems-grid">
+            <section class="systems-section">
+              <h4>Charging</h4>
+              <div class="entity-list" id="chargers"></div>
+            </section>
+            <section class="systems-section">
+              <h4>Battery stack</h4>
+              <div class="entity-list" id="batteries"></div>
+            </section>
+            <section class="systems-section">
+              <h4>Growatt</h4>
+              <div class="entity-list vehicle-list" id="plants"></div>
+            </section>
+            <section class="systems-section">
+              <h4>Vehicle fleet</h4>
+              <div class="entity-list vehicle-list" id="vehicles"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      window.__INITIAL_DASHBOARD__ = {{ initial_data | tojson }};
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', path='app.js') }}"></script>
+  </body>
+  </html>
