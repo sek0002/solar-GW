@@ -4,12 +4,11 @@ import json
 import secrets
 import time
 from pathlib import Path
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode
 
 import httpx
 
 from app.config import Settings, resolve_path
-from app.services.tesla_keys import WELL_KNOWN_TESLA_PUBLIC_KEY_PATH
 
 
 class TeslaOAuthError(RuntimeError):
@@ -29,25 +28,6 @@ def build_authorize_url(settings: Settings, state: str) -> str:
         "state": state,
     }
     return f"{settings.tesla_auth_url}?{urlencode(params)}"
-
-
-def build_pairing_url(settings: Settings) -> str | None:
-    if not settings.tesla_partner_domain:
-        return None
-    return f"https://www.tesla.com/_ak/{settings.tesla_partner_domain}"
-
-
-def get_public_key_url(settings: Settings) -> str | None:
-    if settings.tesla_public_key_url:
-        return settings.tesla_public_key_url
-    if not settings.tesla_partner_domain:
-        if not settings.tesla_redirect_uri:
-            return None
-        redirect = urlsplit(settings.tesla_redirect_uri)
-        if not redirect.scheme or not redirect.netloc:
-            return None
-        return f"{redirect.scheme}://{redirect.netloc}{WELL_KNOWN_TESLA_PUBLIC_KEY_PATH}"
-    return f"https://{settings.tesla_partner_domain}/.well-known/appspecific/com.tesla.3p.public-key.pem"
 
 
 def build_state() -> str:
