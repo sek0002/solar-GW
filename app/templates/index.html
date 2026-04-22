@@ -27,20 +27,23 @@
           <h1>{{ settings.dashboard_title }}</h1>
         </div>
         <div class="topbar-side">
-          <div class="header-actions">
-            {% if app_authenticated %}
-            <a class="auth-link" href="/logout">Lock</a>
-            {% endif %}
-            {% if tesla_oauth_enabled %}
-            <a class="auth-link" href="{% if tesla_connected %}/auth/tesla/logout{% else %}/auth/tesla/login{% endif %}">
-              {% if tesla_connected %}Disconnect Tesla{% else %}Connect Tesla{% endif %}
-            </a>
-            {% endif %}
-            {% if tesla_pairing_url %}
-            <a class="auth-link" href="/auth/tesla/pair">Pair Tesla Key</a>
-            {% endif %}
-            <a class="auth-link" href="/admin/tesla-partner">Tesla Setup</a>
-          </div>
+          <details class="header-menu">
+            <summary class="auth-link">Menu</summary>
+            <div class="header-menu-list">
+              {% if tesla_oauth_enabled %}
+              <a class="header-menu-link" href="{% if tesla_connected %}/auth/tesla/logout{% else %}/auth/tesla/login{% endif %}">
+                {% if tesla_connected %}Disconnect Tesla{% else %}Connect Tesla{% endif %}
+              </a>
+              {% endif %}
+              {% if tesla_pairing_url %}
+              <a class="header-menu-link" href="/auth/tesla/pair">Pair Tesla Key</a>
+              {% endif %}
+              <a class="header-menu-link" href="/admin/tesla-partner">Tesla Setup</a>
+              {% if app_authenticated %}
+              <a class="header-menu-link" href="/logout">Log out</a>
+              {% endif %}
+            </div>
+          </details>
         </div>
       </header>
       <div class="provider-strip">

@@ -87,7 +87,7 @@ async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Setti
         else:
             notes.append(f"{vehicle_name} is currently {vehicle_state_name}; Tesla did not provide live vehicle_data.")
 
-        charger_power_kw = round(float(charge_state.get("charger_power", 0.0)), 2)
+        charger_power_kw = round(abs(float(charge_state.get("charger_power", 0.0))), 2)
         charging_state = charge_state.get("charging_state") or vehicle_state_name.capitalize()
         plugged_in_raw = charge_state.get("conn_charge_cable")
         plugged_in = None if plugged_in_raw is None else plugged_in_raw != "<invalid>"

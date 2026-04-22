@@ -75,6 +75,52 @@ body {
   background: rgba(97, 230, 255, 0.08);
 }
 
+.header-menu {
+  position: relative;
+}
+
+.header-menu summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.header-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.header-menu-list {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(8, 20, 30, 0.94);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.32);
+  display: grid;
+  gap: 6px;
+  z-index: 20;
+}
+
+.header-menu:not([open]) .header-menu-list {
+  display: none;
+}
+
+.header-menu-link {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.header-menu-link:hover {
+  background: rgba(97, 230, 255, 0.08);
+}
+
 .login-body {
   display: grid;
   place-items: center;
