@@ -9,6 +9,7 @@ let activeVehicleChartKey = null;
 let energyChartWindowHours = 6;
 let vehicleChartWindowHours = 6;
 let automationPanelOpen = false;
+const MANUAL_CHARGE_STORAGE_KEY = "solar-gw-manual-charge";
 
 function formatValue(value, unit = "") {
   if (value === null || value === undefined || value === "") return "N/A";
@@ -291,6 +292,34 @@ function renderUpdatedAt(timestamp) {
   document.getElementById("updated-at").textContent = `Last sync ${value}`;
 }
 
+function loadManualChargeState() {
+  try {
+    const raw = window.localStorage.getItem(MANUAL_CHARGE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return {
+      enabled: Boolean(parsed.enabled),
+      targetAmps: Math.max(2, Math.min(30, Number(parsed.targetAmps) || 10)),
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function saveManualChargeState(enabled, targetAmps) {
+  try {
+    window.localStorage.setItem(
+      MANUAL_CHARGE_STORAGE_KEY,
+      JSON.stringify({
+        enabled: Boolean(enabled),
+        targetAmps: Math.max(2, Math.min(30, Number(targetAmps) || 10)),
+      }),
+    );
+  } catch (_error) {
+    // Ignore storage failures and keep the UI functional.
+  }
+}
+
 function updateManualChargeReadout(amps) {
   const numericAmps = Number(amps);
   const kw = ((numericAmps * 230) / 1000).toFixed(2);
@@ -346,9 +375,12 @@ function renderAutomationPanel(panel) {
 
   const manualEnabled = document.getElementById("manual-charge-enabled");
   const manualSlider = document.getElementById("manual-charge-slider");
-  const targetAmps = panel.manual_charge?.target_amps || 10;
-  manualEnabled.checked = Boolean(panel.manual_charge?.enabled);
+  const savedManualCharge = loadManualChargeState();
+  const targetAmps = panel.manual_charge?.target_amps ?? savedManualCharge?.targetAmps ?? 10;
+  const manualChargeEnabled = panel.manual_charge?.enabled ?? savedManualCharge?.enabled ?? false;
+  manualEnabled.checked = Boolean(manualChargeEnabled);
   manualSlider.value = String(targetAmps);
+  saveManualChargeState(manualChargeEnabled, targetAmps);
   updateManualChargeReadout(targetAmps);
   document.getElementById("manual-charge-title").textContent = manualEnabled.checked ? "Manual charge on" : "Manual charge off";
   document.getElementById("manual-charge-detail").textContent = manualEnabled.checked
@@ -383,6 +415,7 @@ function renderAutomationPanel(panel) {
 
   manualEnabled.onchange = async () => {
     document.getElementById("manual-charge-title").textContent = manualEnabled.checked ? "Manual charge on" : "Manual charge off";
+    saveManualChargeState(manualEnabled.checked, manualSlider.value);
     await fetch("/api/automation/manual-charge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -397,8 +430,10 @@ function renderAutomationPanel(panel) {
   manualSlider.oninput = () => {
     updateManualChargeReadout(manualSlider.value);
     document.getElementById("manual-charge-detail").textContent = `${manualSlider.value}A / ${((Number(manualSlider.value) * 230) / 1000).toFixed(2)} kW`;
+    saveManualChargeState(manualEnabled.checked, manualSlider.value);
   };
   manualSlider.onchange = async () => {
+    saveManualChargeState(manualEnabled.checked, manualSlider.value);
     await fetch("/api/automation/manual-charge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

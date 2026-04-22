@@ -1,4 +1,4 @@
-const CACHE_NAME = "solar-gw-v1";
+const CACHE_NAME = "solar-gw-v2";
 const STATIC_ASSETS = [
   "/login",
   "/static/styles.css",
@@ -42,5 +42,11 @@ self.addEventListener("fetch", (event) => {
         });
       })
     );
+  }
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
   }
 });
