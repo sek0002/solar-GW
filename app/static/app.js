@@ -553,8 +553,9 @@ function renderChartLegend(rootId, filterFn, activeKey, renderFn, setActiveKey) 
   });
 }
 
-function createChart(canvas, datasets, hours, windowStart, windowEnd) {
+function createChart(canvas, datasets, hours, windowStart, windowEnd, options = {}) {
   const stepHours = getXAxisStepHours(hours);
+  const powerMin = options.powerMin ?? null;
   return new window.Chart(canvas, {
       type: "line",
       data: { datasets },
@@ -600,6 +601,7 @@ function createChart(canvas, datasets, hours, windowStart, windowEnd) {
           },
           power: {
             position: "left",
+            min: powerMin,
             ticks: {
               color: "rgba(156, 183, 180, 0.88)",
               callback: (value) => `${value} kW`,
@@ -621,12 +623,13 @@ function createChart(canvas, datasets, hours, windowStart, windowEnd) {
     });
 }
 
-function updateChart(chart, datasets, hours, windowStart, windowEnd) {
+function updateChart(chart, datasets, hours, windowStart, windowEnd, options = {}) {
   chart.data.datasets = datasets;
   chart.options.scales.x.min = windowStart;
   chart.options.scales.x.max = windowEnd;
   chart.options.scales.x.ticks.stepSize = getXAxisStepHours(hours) * 60 * 60 * 1000;
   chart.options.scales.x.ticks.callback = (value) => formatXAxisLabel(value, hours);
+  chart.options.scales.power.min = options.powerMin ?? null;
   chart.options.plugins.tooltip.callbacks.title = (items) => {
     if (!items.length) return "";
     return formatXAxisLabel(items[0].parsed.x, hours);
@@ -654,11 +657,11 @@ function renderEnergyChart() {
   );
 
   if (!energyChart) {
-    energyChart = createChart(canvas, datasets, energyChartWindowHours, windowStart, windowEnd);
+    energyChart = createChart(canvas, datasets, energyChartWindowHours, windowStart, windowEnd, { powerMin: null });
     return;
   }
 
-  updateChart(energyChart, datasets, energyChartWindowHours, windowStart, windowEnd);
+  updateChart(energyChart, datasets, energyChartWindowHours, windowStart, windowEnd, { powerMin: null });
 }
 
 function renderVehicleChart() {
@@ -681,11 +684,11 @@ function renderVehicleChart() {
   );
 
   if (!vehicleChart) {
-    vehicleChart = createChart(canvas, datasets, vehicleChartWindowHours, windowStart, windowEnd);
+    vehicleChart = createChart(canvas, datasets, vehicleChartWindowHours, windowStart, windowEnd, { powerMin: 0 });
     return;
   }
 
-  updateChart(vehicleChart, datasets, vehicleChartWindowHours, windowStart, windowEnd);
+  updateChart(vehicleChart, datasets, vehicleChartWindowHours, windowStart, windowEnd, { powerMin: 0 });
 }
 
 function renderDashboard(data) {

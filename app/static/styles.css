@@ -66,6 +66,8 @@ body {
 .auth-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 40px;
   padding: 0 14px;
   border-radius: 999px;
@@ -73,6 +75,15 @@ body {
   color: var(--text);
   text-decoration: none;
   background: rgba(97, 230, 255, 0.08);
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.auth-link:hover {
+  background: rgba(97, 230, 255, 0.14);
+  border-color: rgba(97, 230, 255, 0.55);
 }
 
 .header-menu {
@@ -82,23 +93,47 @@ body {
 .header-menu summary {
   list-style: none;
   cursor: pointer;
+  user-select: none;
+}
+
+.header-menu summary::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+  opacity: 0.85;
+  transition: transform 140ms ease;
 }
 
 .header-menu summary::-webkit-details-marker {
   display: none;
 }
 
+.header-menu[open] summary {
+  background: rgba(97, 230, 255, 0.16);
+  border-color: rgba(97, 230, 255, 0.6);
+}
+
+.header-menu[open] summary::after {
+  transform: rotate(-135deg) translateX(-1px);
+}
+
 .header-menu-list {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  min-width: 220px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: rgba(8, 20, 30, 0.94);
+  min-width: 240px;
+  padding: 10px;
+  border: 1px solid rgba(97, 230, 255, 0.14);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(15, 34, 44, 0.98), rgba(8, 20, 30, 0.96));
   backdrop-filter: blur(18px);
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.32);
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
   display: grid;
   gap: 6px;
   z-index: 20;
@@ -110,15 +145,22 @@ body {
 
 .header-menu-link {
   display: block;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 11px 13px;
+  border-radius: 14px;
   color: var(--text);
   text-decoration: none;
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.025);
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
 }
 
 .header-menu-link:hover {
   background: rgba(97, 230, 255, 0.08);
+  border-color: rgba(97, 230, 255, 0.18);
+  transform: translateY(-1px);
 }
 
 .login-body {
