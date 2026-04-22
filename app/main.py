@@ -48,6 +48,22 @@ from app.services.tesla_oauth import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+
+
+def _build_asset_version() -> str:
+    tracked_files = [
+        STATIC_DIR / "app.js",
+        STATIC_DIR / "styles.css",
+        STATIC_DIR / "service-worker.js",
+        STATIC_DIR / "manifest.webmanifest",
+        STATIC_DIR / "icons" / "icon-192.png",
+        STATIC_DIR / "icons" / "icon-512.png",
+    ]
+    return str(int(max(path.stat().st_mtime for path in tracked_files if path.exists())))
+
+
+ASSET_VERSION = _build_asset_version()
 
 app = FastAPI(title="solar-GW")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -88,27 +104,39 @@ app.add_middleware(OTPAuthMiddleware)
 
 @app.get("/assets/styles.css")
 async def styles_asset() -> FileResponse:
-    return FileResponse(BASE_DIR / "static" / "styles.css", media_type="text/css")
+    return FileResponse(STATIC_DIR / "styles.css", media_type="text/css", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/assets/app.js")
 async def app_script_asset() -> FileResponse:
-    return FileResponse(BASE_DIR / "static" / "app.js", media_type="application/javascript")
+    return FileResponse(
+        STATIC_DIR / "app.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/service-worker.js")
 async def service_worker_asset() -> FileResponse:
-    return FileResponse(BASE_DIR / "static" / "service-worker.js", media_type="application/javascript")
+    return FileResponse(
+        STATIC_DIR / "service-worker.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/manifest.webmanifest")
 async def manifest_asset() -> FileResponse:
-    return FileResponse(BASE_DIR / "static" / "manifest.webmanifest", media_type="application/manifest+json")
+    return FileResponse(
+        STATIC_DIR / "manifest.webmanifest",
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/icons/{icon_name}")
 async def icon_asset(icon_name: str) -> FileResponse:
-    return FileResponse(BASE_DIR / "static" / "icons" / icon_name)
+    return FileResponse(STATIC_DIR / "icons" / icon_name, headers={"Cache-Control": "public, max-age=3600"})
 
 
 def _set_auth_cookie(response: RedirectResponse, settings: Settings, token: str) -> None:
@@ -136,6 +164,7 @@ async def login_page(request: Request, settings: Settings = Depends(get_settings
         {
             "request": request,
             "settings": settings,
+            "asset_version": ASSET_VERSION,
             "otp_enabled": is_otp_auth_configured(settings),
             "error_message": None,
         },
@@ -197,6 +226,7 @@ async def dashboard_page(request: Request, settings: Settings = Depends(get_sett
         {
             "request": request,
             "settings": settings,
+            "asset_version": ASSET_VERSION,
             "initial_data": data.model_dump(mode="json"),
             "tesla_oauth_enabled": is_tesla_oauth_configured(settings),
             "tesla_connected": bool(settings.tesla_access_token or load_saved_tokens(settings)),
