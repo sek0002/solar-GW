@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -12,12 +14,61 @@ from app.providers.generic_vendor import load_vendor_snapshot
 from app.providers.tesla import load_tesla_vehicle_snapshot
 from app.services.automation_state import build_automation_panel
 
+NON_TESLA_SNAPSHOT_TTL = timedelta(minutes=1)
+_NON_TESLA_SNAPSHOT_CACHE: dict[str, object | None] = {
+    "captured_at": None,
+    "cache_key": None,
+    "snapshots": None,
+}
 
-async def build_dashboard_data(settings: Settings) -> DashboardData:
+
+def _build_non_tesla_cache_key(settings: Settings) -> str:
+    return "|".join(
+        [
+            settings.growatt_overview_url or "",
+            settings.growatt_battery_url or "",
+            settings.growatt_token or "",
+            settings.growatt_server_url,
+            settings.growatt_platform,
+            settings.goodwe_overview_url or "",
+            settings.goodwe_battery_url or "",
+            settings.goodwe_token or "",
+            settings.goodwe_username or "",
+            settings.goodwe_password or "",
+            settings.goodwe_plant_id or "",
+            settings.goodwe_api_url,
+        ]
+    )
+
+
+def _get_cached_non_tesla_snapshots(cache_key: str):
+    captured_at = _NON_TESLA_SNAPSHOT_CACHE.get("captured_at")
+    snapshots = _NON_TESLA_SNAPSHOT_CACHE.get("snapshots")
+    if (
+        _NON_TESLA_SNAPSHOT_CACHE.get("cache_key") != cache_key
+        or captured_at is None
+        or snapshots is None
+        or datetime.now(timezone.utc) - captured_at > NON_TESLA_SNAPSHOT_TTL
+    ):
+        return None
+    return copy.deepcopy(snapshots)
+
+
+def _store_cached_non_tesla_snapshots(cache_key: str, snapshots) -> None:
+    _NON_TESLA_SNAPSHOT_CACHE["cache_key"] = cache_key
+    _NON_TESLA_SNAPSHOT_CACHE["captured_at"] = datetime.now(timezone.utc)
+    _NON_TESLA_SNAPSHOT_CACHE["snapshots"] = copy.deepcopy(snapshots)
+
+
+async def _load_non_tesla_snapshots(settings: Settings):
+    cache_key = _build_non_tesla_cache_key(settings)
+    cached_snapshots = _get_cached_non_tesla_snapshots(cache_key)
+    if cached_snapshots is not None:
+        return cached_snapshots
+
     timeout = httpx.Timeout(settings.request_timeout_seconds)
     async with httpx.AsyncClient(timeout=timeout) as client:
         snapshots = await asyncio.gather(
-            load_tesla_vehicle_snapshot(client, settings),
             load_vendor_snapshot(
                 client,
                 name="Growatt",
@@ -46,6 +97,17 @@ async def build_dashboard_data(settings: Settings) -> DashboardData:
             else load_goodwe_snapshot(settings),
             return_exceptions=True,
         )
+
+    _store_cached_non_tesla_snapshots(cache_key, snapshots)
+    return snapshots
+
+
+async def build_dashboard_data(settings: Settings) -> DashboardData:
+    timeout = httpx.Timeout(settings.request_timeout_seconds)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        tesla_snapshot = await load_tesla_vehicle_snapshot(client, settings)
+
+    snapshots = [tesla_snapshot, *await _load_non_tesla_snapshots(settings)]
 
     power_flow = PowerFlow()
     metrics: list[SummaryMetric] = []
