@@ -76,12 +76,12 @@ def _set_auth_cookie(response: RedirectResponse, settings: Settings, token: str)
         max_age=settings.app_session_hours * 3600,
         httponly=True,
         secure=settings.app_auth_cookie_secure,
-        samesite="strict",
+        samesite="lax",
     )
 
 
 def _clear_auth_cookie(response: RedirectResponse, settings: Settings) -> None:
-    response.delete_cookie(settings.app_auth_cookie_name, httponly=True, samesite="strict")
+    response.delete_cookie(settings.app_auth_cookie_name, httponly=True, samesite="lax")
 
 
 @app.get("/login", response_class=HTMLResponse)
