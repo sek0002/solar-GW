@@ -23,6 +23,7 @@ from app.services.auth import (
     verify_session_token,
 )
 from app.services.dashboard import build_dashboard_data
+from app.services.tesla_partner import build_partner_status, register_partner_domain
 from app.services.tesla_keys import WELL_KNOWN_TESLA_PUBLIC_KEY_PATH, ensure_tesla_keypair, get_public_key_path
 from app.services.automation_state import GlobalAutomationPayload, ManualChargePayload, RuleTogglePayload, update_global_automation, update_manual_charge, update_rule
 from app.services.tesla_oauth import (
@@ -43,7 +44,7 @@ app = FastAPI(title="solar-GW")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-PUBLIC_PATHS = {"/login"}
+PUBLIC_PATHS = {"/login", WELL_KNOWN_TESLA_PUBLIC_KEY_PATH}
 
 
 class OTPAuthMiddleware(BaseHTTPMiddleware):
@@ -246,6 +247,41 @@ async def tesla_logout(request: Request, settings: Settings = Depends(get_settin
     return RedirectResponse(url="/")
 
 
+@app.get("/admin/tesla-partner", response_class=HTMLResponse)
+async def tesla_partner_admin(
+    request: Request,
+    flash: str | None = Query(default=None),
+    tone: str | None = Query(default=None),
+    settings: Settings = Depends(get_settings),
+):
+    require_authenticated_request(request, settings)
+    partner_status = await build_partner_status(settings)
+    return templates.TemplateResponse(
+        request,
+        "admin_tesla_partner.html",
+        {
+            "request": request,
+            "settings": settings,
+            "partner_status": partner_status,
+            "flash_message": flash,
+            "flash_tone": tone,
+        },
+    )
+
+
+@app.post("/admin/tesla-partner/register")
+async def tesla_partner_register(request: Request, settings: Settings = Depends(get_settings)):
+    require_authenticated_request(request, settings)
+    try:
+        await register_partner_domain(settings)
+    except httpx.HTTPStatusError as exc:
+        message = f"Tesla register failed with HTTP {exc.response.status_code}: {exc.response.text[:400]}"
+        return RedirectResponse(url=f"/admin/tesla-partner?flash={message}&tone=warn", status_code=303)
+    except Exception as exc:
+        return RedirectResponse(url=f"/admin/tesla-partner?flash={str(exc)}&tone=warn", status_code=303)
+    return RedirectResponse(url="/admin/tesla-partner?flash=Tesla partner registration request completed.", status_code=303)
+
+
 @app.get("/auth/tesla/pair")
 async def tesla_pair(request: Request, settings: Settings = Depends(get_settings)):
     require_authenticated_request(request, settings)
@@ -260,7 +296,6 @@ async def tesla_pair(request: Request, settings: Settings = Depends(get_settings
 
 @app.get(WELL_KNOWN_TESLA_PUBLIC_KEY_PATH, response_class=PlainTextResponse)
 async def tesla_public_key(request: Request, settings: Settings = Depends(get_settings)):
-    require_authenticated_request(request, settings)
     ensure_tesla_keypair(settings)
     public_key_path = get_public_key_path(settings)
     if not public_key_path.exists():

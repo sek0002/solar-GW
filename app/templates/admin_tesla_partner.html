@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tesla Partner Setup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}" />
+  </head>
+  <body>
+    <main class="login-shell">
+      <section class="login-panel">
+        <p class="eyebrow">Tesla Partner Setup</p>
+        <h1>Partner domain status</h1>
+        <p class="login-copy">This page checks whether the Tesla public key is reachable and whether Tesla already has a partner key registered for the configured domain.</p>
+        {% if flash_message %}
+        <div class="login-alert{% if flash_tone == 'warn' %} login-alert-warn{% endif %}">{{ flash_message }}</div>
+        {% endif %}
+        <div class="entity-secondary" style="margin-top: 18px;">
+          <span>Domain: {{ partner_status.domain or "Not configured" }}</span>
+          <span>Public key URL: {{ partner_status.public_key_url or "Unavailable" }}</span>
+          <span>Public key HTTP status: {{ partner_status.public_key_http_status or "Unknown" }}</span>
+          <span>Tesla registered key: {{ "Present" if partner_status.tesla_registered_key else "Missing" }}</span>
+        </div>
+        {% if partner_status.public_key_error %}
+        <div class="login-alert login-alert-warn">{{ partner_status.public_key_error }}</div>
+        {% endif %}
+        {% if partner_status.tesla_registration_error %}
+        <div class="login-alert login-alert-warn">{{ partner_status.tesla_registration_error }}</div>
+        {% endif %}
+        <div class="login-form">
+          <form method="post" action="/admin/tesla-partner/register">
+            <button class="login-submit" type="submit">Register partner domain with Tesla</button>
+          </form>
+          <a class="auth-link" href="/">Back to dashboard</a>
+        </div>
+      </section>
+    </main>
+  </body>
+  </html>

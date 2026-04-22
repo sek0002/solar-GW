@@ -76,6 +76,7 @@ For the OAuth flow, set:
 Then open `/auth/tesla/login` or click the dashboard connect button.
 If Tesla vehicle access is still blocked after OAuth, use the dashboard's `Pair Tesla Key` action to open Tesla's mobile-app pairing flow for the configured partner domain.
 The app also serves the Tesla well-known public-key route at `/.well-known/appspecific/com.tesla.3p.public-key.pem` and can auto-generate a local EC keypair for that endpoint.
+There is also an authenticated `Tesla Setup` page in the app that checks the public-key URL and can call Tesla's partner registration endpoint using your client credentials.
 
 For the manual token flow, set:
 

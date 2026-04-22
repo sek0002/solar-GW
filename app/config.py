@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     tesla_client_secret: str | None = None
     tesla_redirect_uri: str | None = None
     tesla_scope: str = "openid offline_access user_data vehicle_device_data vehicle_charging_cmds"
+    tesla_partner_scope: str = "openid user_data vehicle_device_data vehicle_cmds vehicle_charging_cmds"
     tesla_access_token: str | None = None
     tesla_vehicle_vins: str = ""
     tesla_token_store_path: str = ".data/tesla_oauth.json"
