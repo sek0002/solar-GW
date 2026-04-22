@@ -34,6 +34,18 @@ FastAPI energy dashboard for combining Growatt battery data, GoodWe solar data, 
 
 4. Open [http://localhost:8003](http://localhost:8003).
 
+## OTP login
+
+The app now expects OTP-only access before serving the dashboard or any backend API routes. Configure these values in `.env` before exposing it:
+
+- `APP_AUTH_SECRET`
+- `APP_OTP_TOTP_SECRET`
+- `APP_OTP_ISSUER`
+- `APP_SESSION_HOURS`
+- `APP_AUTH_COOKIE_SECURE`
+
+Use a standard TOTP base32 secret from your authenticator app workflow. The app validates six-digit OTP codes, rate-limits failed attempts, uses signed `HttpOnly` session cookies, and blocks unauthenticated access to the dashboard, automation endpoints, and Tesla auth endpoints.
+
 ## Provider setup
 
 ### Tesla Wall Connector and Tesla vehicles

@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     refresh_interval_seconds: int = 30
     request_timeout_seconds: float = 15.0
     demo_mode: bool = True
+    app_auth_secret: str | None = None
+    app_otp_totp_secret: str | None = None
+    app_otp_issuer: str = "solar-GW"
+    app_session_hours: int = 12
+    app_auth_cookie_name: str = "solar_gw_session"
+    app_auth_cookie_secure: bool = False
+    app_auth_lockout_minutes: int = 15
+    app_auth_max_attempts: int = 5
 
     tesla_api_base_url: str = "https://fleet-api.prd.na.vn.cloud.tesla.com"
     tesla_auth_url: str = "https://auth.tesla.com/oauth2/v3/authorize"

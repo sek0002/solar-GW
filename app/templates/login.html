@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ settings.dashboard_title }} Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}" />
+  </head>
+  <body class="login-body">
+    <main class="login-shell">
+      <section class="login-panel">
+        <p class="eyebrow">Protected Access</p>
+        <h1>{{ settings.dashboard_title }}</h1>
+        <p class="login-copy">Enter the six-digit one-time passcode from your authenticator app to continue.</p>
+        {% if not otp_enabled %}
+        <div class="login-alert login-alert-warn">OTP login is not configured yet. Set the auth values in the environment before exposing this app.</div>
+        {% endif %}
+        {% if error_message %}
+        <div class="login-alert">{{ error_message }}</div>
+        {% endif %}
+        <form class="login-form" method="post" action="/login" {% if not otp_enabled %}aria-disabled="true"{% endif %}>
+          <label class="login-label" for="otp">One-time passcode</label>
+          <input class="login-input" id="otp" name="otp" type="password" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="123456" {% if not otp_enabled %}disabled{% endif %} required />
+          <button class="login-submit" type="submit" {% if not otp_enabled %}disabled{% endif %}>Unlock dashboard</button>
+        </form>
+      </section>
+    </main>
+  </body>
+  </html>
