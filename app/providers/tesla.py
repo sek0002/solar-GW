@@ -10,7 +10,7 @@ from app.config import Settings, parse_csv
 from app.providers.base import ProviderSnapshot
 from app.services.tesla_oauth import build_pairing_url, get_public_key_url, get_valid_access_token
 
-TESLA_SNAPSHOT_TTL = timedelta(minutes=2)
+TESLA_SNAPSHOT_TTL = timedelta(minutes=5)
 _TESLA_SNAPSHOT_CACHE: dict[str, Any] = {
     "captured_at": None,
     "cache_key": None,
