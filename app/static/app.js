@@ -123,6 +123,7 @@ function hydrateTeslaVehicles(vehicles) {
       ...cached,
       ...vehicle,
       battery_level: vehicle.battery_level ?? cached.battery_level ?? null,
+      charge_current_a: vehicle.charge_current_a ?? cached.charge_current_a ?? null,
       charge_power_kw: vehicle.charge_power_kw ?? cached.charge_power_kw ?? null,
       range_km: vehicle.range_km ?? cached.range_km ?? null,
       plugged_in: vehicle.plugged_in ?? cached.plugged_in ?? null,
@@ -321,7 +322,7 @@ function renderVehicles(vehicles) {
             <span>${vehicle.stale ? `Last known ${vehicle.charging_state || "Unknown"}` : vehicle.charging_state || "Unknown"}</span>
           </div>
           <div class="entity-secondary">
-            <span>Charge power: ${formatValue(vehicle.charge_power_kw, "kW")}</span>
+            <span>Charge rate: ${formatValue(vehicle.charge_power_kw, "kW")}</span>
             <span>Range: ${formatValue(vehicle.range_km, "km")}</span>
             <span>Plugged in: ${vehicle.plugged_in ? "Yes" : "No"}</span>
             <span>Location: ${vehicle.location || "Unknown"}</span>
@@ -718,6 +719,7 @@ function createChart(canvas, datasets, hours, windowStart, windowEnd, options = 
   const stepHours = getXAxisStepHours(hours);
   const forcePowerZero = options.forcePowerZero ?? false;
   const powerScale = getPowerScaleBounds(datasets, options);
+  const powerTickSuffix = options.powerTickSuffix || "kW";
   return new window.Chart(canvas, {
       type: "line",
       data: { datasets },
@@ -775,7 +777,7 @@ function createChart(canvas, datasets, hours, windowStart, windowEnd, options = 
             },
             ticks: {
               color: "rgba(156, 183, 180, 0.88)",
-              callback: (value) => `${value} kW`,
+              callback: (value) => `${value} ${powerTickSuffix}`,
             },
             grid: { color: "rgba(139, 179, 180, 0.08)" },
           },
@@ -796,6 +798,7 @@ function createChart(canvas, datasets, hours, windowStart, windowEnd, options = 
 
 function updateChart(chart, datasets, hours, windowStart, windowEnd, options = {}) {
   const powerScale = getPowerScaleBounds(datasets, options);
+  const powerTickSuffix = options.powerTickSuffix || "kW";
   chart.data.datasets = datasets;
   chart.options.scales.x.min = windowStart;
   chart.options.scales.x.max = windowEnd;
@@ -807,6 +810,7 @@ function updateChart(chart, datasets, hours, windowStart, windowEnd, options = {
   chart.options.scales.power.beginAtZero = Boolean(options.forcePowerZero);
   chart.options.scales.power.bounds = options.forcePowerZero ? "ticks" : undefined;
   chart.options.scales.power.grace = options.forcePowerZero ? 0 : undefined;
+  chart.options.scales.power.ticks.callback = (value) => `${value} ${powerTickSuffix}`;
   chart.options.plugins.tooltip.callbacks.title = (items) => {
     if (!items.length) return "";
     return formatXAxisLabel(items[0].parsed.x, hours);

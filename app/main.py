@@ -23,7 +23,7 @@ from app.services.auth import (
     verify_session_token,
 )
 from app.services.dashboard import build_dashboard_data
-from app.services.tesla_commands import apply_manual_charge_request
+from app.services.tesla_commands import apply_automation_panel
 from app.services.tesla_partner import build_partner_status, register_partner_domain
 from app.services.tesla_keys import WELL_KNOWN_TESLA_PUBLIC_KEY_PATH, ensure_tesla_keypair, get_public_key_path
 from app.services.automation_state import (
@@ -248,21 +248,28 @@ async def dashboard_api(request: Request, settings: Settings = Depends(get_setti
 async def automation_rule_toggle(request: Request, payload: RuleTogglePayload, settings: Settings = Depends(get_settings)):
     require_authenticated_request(request, settings)
     update_rule(payload.rule_id, payload.enabled)
-    return {"ok": True}
+    data = await build_dashboard_data(settings)
+    command_result = await apply_automation_panel(settings, data.automation_panel)
+    update_manual_charge_result(command_result)
+    return {"ok": True, "tesla": command_result}
 
 
 @app.post("/api/automation/global")
 async def automation_global_toggle(request: Request, payload: GlobalAutomationPayload, settings: Settings = Depends(get_settings)):
     require_authenticated_request(request, settings)
     update_global_automation(payload.enabled)
-    return {"ok": True}
+    data = await build_dashboard_data(settings)
+    command_result = await apply_automation_panel(settings, data.automation_panel)
+    update_manual_charge_result(command_result)
+    return {"ok": True, "tesla": command_result}
 
 
 @app.post("/api/automation/manual-charge")
 async def automation_manual_charge(request: Request, payload: ManualChargePayload, settings: Settings = Depends(get_settings)):
     require_authenticated_request(request, settings)
     update_manual_charge(payload.enabled, payload.target_amps)
-    command_result = await apply_manual_charge_request(settings, payload.enabled, payload.target_amps)
+    data = await build_dashboard_data(settings)
+    command_result = await apply_automation_panel(settings, data.automation_panel)
     update_manual_charge_result(command_result)
     return {"ok": True, "tesla": command_result}
 

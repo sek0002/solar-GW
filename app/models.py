@@ -28,6 +28,7 @@ class VehicleStatus(BaseModel):
     vin: str | None = None
     battery_level: int | None = None
     charging_state: str | None = None
+    charge_current_a: float | None = None
     charge_power_kw: float | None = None
     range_km: float | None = None
     plugged_in: bool | None = None

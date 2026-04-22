@@ -87,7 +87,15 @@ async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Setti
         else:
             notes.append(f"{vehicle_name} is currently {vehicle_state_name}; Tesla did not provide live vehicle_data.")
 
-        charger_power_kw = round(abs(float(charge_state.get("charger_power", 0.0))), 2)
+        charge_current_a = charge_state.get("charger_actual_current")
+        if charge_current_a is None:
+            charge_current_a = charge_state.get("charge_current_request")
+        charge_current_a = round(abs(float(charge_current_a)), 2) if charge_current_a is not None else None
+        exact_charge_power_kw = (
+            round((charge_current_a * 230.0) / 1000.0, 2)
+            if charge_current_a is not None
+            else round(abs(float(charge_state.get("charger_power", 0.0))), 2)
+        )
         charging_state = charge_state.get("charging_state") or vehicle_state_name.capitalize()
         plugged_in_raw = charge_state.get("conn_charge_cable")
         plugged_in = None if plugged_in_raw is None else plugged_in_raw != "<invalid>"
@@ -99,7 +107,8 @@ async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Setti
                 "vin": vin,
                 "battery_level": charge_state.get("battery_level"),
                 "charging_state": charging_state,
-                "charge_power_kw": charger_power_kw,
+                "charge_current_a": charge_current_a,
+                "charge_power_kw": exact_charge_power_kw,
                 "range_km": round(float(charge_state.get("battery_range", 0.0)) * 1.60934, 1)
                 if charge_state.get("battery_range") is not None
                 else None,
@@ -112,7 +121,7 @@ async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Setti
             connected_vehicle_names.append(vehicle_name)
         if charging_state == "Charging":
             active_sessions += 1
-            total_charge_power_kw += charger_power_kw
+            total_charge_power_kw += exact_charge_power_kw
 
         if charge_state.get("battery_level") is not None:
             metrics.append(
