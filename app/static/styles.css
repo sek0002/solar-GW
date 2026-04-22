@@ -67,18 +67,18 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  min-width: 240px;
-  min-height: 72px;
-  padding: 0 24px;
-  border-radius: 16px;
-  border: 2px solid rgba(36, 170, 255, 0.92);
-  color: #1f9bff;
+  gap: 10px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(106, 157, 187, 0.22);
+  color: rgba(231, 240, 244, 0.92);
   text-decoration: none;
-  background: rgba(247, 251, 255, 0.98);
+  background: rgba(10, 23, 34, 0.76);
   box-shadow:
-    0 10px 24px rgba(25, 142, 218, 0.18),
-    0 0 0 1px rgba(255, 255, 255, 0.25) inset;
+    0 10px 24px rgba(6, 12, 19, 0.24),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   transition:
     background 140ms ease,
     border-color 140ms ease,
@@ -87,18 +87,19 @@ body {
 }
 
 .auth-link:hover {
-  background: rgba(255, 255, 255, 1);
-  border-color: rgba(36, 170, 255, 1);
+  background: rgba(14, 31, 44, 0.94);
+  border-color: rgba(96, 202, 231, 0.36);
   box-shadow:
-    0 14px 28px rgba(25, 142, 218, 0.22),
-    0 0 0 1px rgba(255, 255, 255, 0.35) inset;
+    0 14px 28px rgba(6, 12, 19, 0.3),
+    0 0 0 1px rgba(96, 202, 231, 0.05) inset;
   transform: translateY(-1px);
 }
 
 .header-menu-trigger-label {
-  font-size: 1.05rem;
+  font-size: 0.82rem;
   font-weight: 500;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .header-menu {
@@ -113,36 +114,36 @@ body {
 
 .header-menu .auth-link::after {
   content: "";
-  width: 14px;
-  height: 14px;
-  border-right: 3px solid currentColor;
-  border-bottom: 3px solid currentColor;
-  transform: rotate(45deg) translateY(-3px);
-  opacity: 1;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+  opacity: 0.82;
   transition: transform 160ms ease;
 }
 
 .header-menu.is-open .auth-link {
-  background: rgba(255, 255, 255, 1);
-  border-color: rgba(36, 170, 255, 1);
+  background: rgba(15, 33, 47, 0.98);
+  border-color: rgba(96, 202, 231, 0.4);
 }
 
 .header-menu.is-open .auth-link::after {
-  transform: rotate(-135deg) translate(-2px, 2px);
+  transform: rotate(-135deg) translate(-1px, 1px);
 }
 
 .header-menu-list {
   position: absolute;
-  top: calc(100% + 16px);
+  top: calc(100% + 10px);
   right: 0;
-  min-width: 276px;
-  padding: 12px;
-  border: 1px solid rgba(208, 229, 247, 0.96);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.98);
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid rgba(92, 143, 174, 0.18);
+  border-radius: 16px;
+  background: rgba(7, 20, 29, 0.97);
   box-shadow:
-    0 22px 38px rgba(17, 93, 146, 0.2),
-    0 2px 0 rgba(255, 255, 255, 0.85) inset;
+    0 22px 38px rgba(3, 9, 15, 0.44),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
   display: grid;
   gap: 4px;
   z-index: 20;
@@ -155,12 +156,12 @@ body {
 .header-menu-link {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-height: 52px;
+  gap: 10px;
+  min-height: 38px;
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 14px;
-  color: rgba(104, 112, 122, 0.96) !important;
+  padding: 9px 10px;
+  border-radius: 12px;
+  color: rgba(220, 231, 237, 0.88) !important;
   text-decoration: none;
   border: 1px solid transparent;
   background: transparent;
@@ -172,36 +173,36 @@ body {
 }
 
 .header-menu-link:visited {
-  color: rgba(104, 112, 122, 0.96) !important;
+  color: rgba(220, 231, 237, 0.88) !important;
 }
 
 .header-menu-label {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 500;
   letter-spacing: 0.01em;
 }
 
 .header-menu-icon {
-  width: 24px;
-  color: rgba(150, 154, 160, 0.94);
-  font-size: 1.1rem;
+  width: 18px;
+  color: rgba(96, 202, 231, 0.84);
+  font-size: 0.92rem;
   line-height: 1;
   text-align: center;
-  flex: 0 0 24px;
+  flex: 0 0 18px;
 }
 
 .header-menu-link:hover {
-  background: linear-gradient(90deg, rgba(36, 170, 255, 0.11), rgba(36, 170, 255, 0.03));
-  border-color: rgba(36, 170, 255, 0.16);
-  color: rgba(62, 73, 83, 1) !important;
+  background: linear-gradient(90deg, rgba(96, 202, 231, 0.12), rgba(96, 202, 231, 0.03));
+  border-color: rgba(96, 202, 231, 0.14);
+  color: rgba(243, 248, 250, 0.98) !important;
   transform: translateX(1px);
 }
 
 .header-menu-link:focus-visible {
   outline: none;
-  border-color: rgba(36, 170, 255, 0.36);
-  background: linear-gradient(90deg, rgba(36, 170, 255, 0.11), rgba(36, 170, 255, 0.03));
-  box-shadow: 0 0 0 3px rgba(36, 170, 255, 0.12);
+  border-color: rgba(96, 202, 231, 0.34);
+  background: linear-gradient(90deg, rgba(96, 202, 231, 0.12), rgba(96, 202, 231, 0.03));
+  box-shadow: 0 0 0 3px rgba(96, 202, 231, 0.12);
 }
 
 .login-body {
