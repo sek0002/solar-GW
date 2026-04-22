@@ -23,6 +23,7 @@ from app.services.auth import (
     verify_session_token,
 )
 from app.services.dashboard import build_dashboard_data
+from app.services.tesla_commands import apply_manual_charge_request
 from app.services.tesla_partner import build_partner_status, register_partner_domain
 from app.services.tesla_keys import WELL_KNOWN_TESLA_PUBLIC_KEY_PATH, ensure_tesla_keypair, get_public_key_path
 from app.services.automation_state import GlobalAutomationPayload, ManualChargePayload, RuleTogglePayload, update_global_automation, update_manual_charge, update_rule
@@ -191,7 +192,8 @@ async def automation_global_toggle(request: Request, payload: GlobalAutomationPa
 async def automation_manual_charge(request: Request, payload: ManualChargePayload, settings: Settings = Depends(get_settings)):
     require_authenticated_request(request, settings)
     update_manual_charge(payload.enabled, payload.target_amps)
-    return {"ok": True}
+    command_result = await apply_manual_charge_request(settings, payload.enabled, payload.target_amps)
+    return {"ok": True, "tesla": command_result}
 
 
 @app.get("/auth/tesla/login")

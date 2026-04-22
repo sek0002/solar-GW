@@ -12,7 +12,7 @@ from app.models import AutomationPanel, AutomationRule, DashboardData, ManualCha
 AUTOMATION_FILE = Path(".data/automation_state.json")
 LOCAL_TZ = ZoneInfo("Australia/Melbourne")
 VOLTAGE = 230.0
-MIN_AMPS = 2
+MIN_AMPS = 5
 MAX_AMPS = 30
 
 

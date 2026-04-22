@@ -28,19 +28,22 @@
         </div>
         <div class="topbar-side">
           <details class="header-menu">
-            <summary class="auth-link">Menu</summary>
+            <summary class="auth-link">
+              <span class="header-menu-trigger-label">Menu</span>
+            </summary>
             <nav class="header-menu-list" aria-label="Header actions">
               {% if tesla_oauth_enabled %}
               <a class="header-menu-link" href="{% if tesla_connected %}/auth/tesla/logout{% else %}/auth/tesla/login{% endif %}">
+                <span class="header-menu-icon" aria-hidden="true">{% if tesla_connected %}↻{% else %}↗{% endif %}</span>
                 <span class="header-menu-label">{% if tesla_connected %}Disconnect Tesla{% else %}Connect Tesla{% endif %}</span>
               </a>
               {% endif %}
               {% if tesla_pairing_url %}
-              <a class="header-menu-link" href="/auth/tesla/pair"><span class="header-menu-label">Pair Tesla Key</span></a>
+              <a class="header-menu-link" href="/auth/tesla/pair"><span class="header-menu-icon" aria-hidden="true">⌁</span><span class="header-menu-label">Pair Tesla Key</span></a>
               {% endif %}
-              <a class="header-menu-link" href="/admin/tesla-partner"><span class="header-menu-label">Tesla Setup</span></a>
+              <a class="header-menu-link" href="/admin/tesla-partner"><span class="header-menu-icon" aria-hidden="true">⚙</span><span class="header-menu-label">Tesla Setup</span></a>
               {% if app_authenticated %}
-              <a class="header-menu-link" href="/logout"><span class="header-menu-label">Log out</span></a>
+              <a class="header-menu-link" href="/logout"><span class="header-menu-icon" aria-hidden="true">⎋</span><span class="header-menu-label">Log out</span></a>
               {% endif %}
             </nav>
           </details>
@@ -74,13 +77,13 @@
             </label>
           </div>
           <strong id="manual-charge-title">Manual charge off</strong>
-          <p id="manual-charge-detail">Set combined amps between 2A and 30A.</p>
+          <p id="manual-charge-detail">Set combined amps between 5A and 30A.</p>
           <div class="manual-charge-inline">
             <div class="manual-charge-readout manual-charge-readout-compact">
               <strong id="manual-charge-amps">10A</strong>
               <span id="manual-charge-kw">2.30 kW</span>
             </div>
-            <input id="manual-charge-slider" type="range" min="2" max="30" step="1" value="10" />
+            <input id="manual-charge-slider" type="range" min="5" max="30" step="1" value="10" />
           </div>
         </article>
         <article class="control-tile battery-tile">

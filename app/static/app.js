@@ -299,7 +299,7 @@ function loadManualChargeState() {
     const parsed = JSON.parse(raw);
     return {
       enabled: Boolean(parsed.enabled),
-      targetAmps: Math.max(2, Math.min(30, Number(parsed.targetAmps) || 10)),
+      targetAmps: Math.max(5, Math.min(30, Number(parsed.targetAmps) || 10)),
     };
   } catch (_error) {
     return null;
@@ -312,7 +312,7 @@ function saveManualChargeState(enabled, targetAmps) {
       MANUAL_CHARGE_STORAGE_KEY,
       JSON.stringify({
         enabled: Boolean(enabled),
-        targetAmps: Math.max(2, Math.min(30, Number(targetAmps) || 10)),
+        targetAmps: Math.max(5, Math.min(30, Number(targetAmps) || 10)),
       }),
     );
   } catch (_error) {
