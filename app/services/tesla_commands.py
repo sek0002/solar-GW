@@ -55,6 +55,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
     vins = parse_csv(settings.tesla_vehicle_vins)
     token = await get_valid_access_token(settings)
     requested_amps = clamp_amps(target_amps)
+    command_base_url = (settings.tesla_vehicle_command_proxy_url or "").rstrip("/")
 
     if not enabled:
         return {
@@ -75,6 +76,13 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
             "applied": False,
             "target_amps": requested_amps,
             "detail": "No Tesla vehicle VINs are configured.",
+        }
+
+    if not command_base_url:
+        return {
+            "applied": False,
+            "target_amps": requested_amps,
+            "detail": "Tesla Vehicle Command Proxy is not configured. Set TESLA_VEHICLE_COMMAND_PROXY_URL to send signed vehicle charge commands.",
         }
 
     timeout = httpx.Timeout(settings.request_timeout_seconds, connect=settings.request_timeout_seconds)
@@ -135,13 +143,13 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
             try:
                 set_result = await _post_command(
                     client,
-                    f"{settings.tesla_api_base_url}/api/1/vehicles/{vehicle['vin']}/command/set_charging_amps",
+                    f"{command_base_url}/api/1/vehicles/{vehicle['vin']}/command/set_charging_amps",
                     token,
                     {"charging_amps": amps},
                 )
                 start_result = await _post_command(
                     client,
-                    f"{settings.tesla_api_base_url}/api/1/vehicles/{vehicle['vin']}/command/charge_start",
+                    f"{command_base_url}/api/1/vehicles/{vehicle['vin']}/command/charge_start",
                     token,
                 )
             except httpx.HTTPError as exc:
@@ -167,7 +175,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
             try:
                 stop_result = await _post_command(
                     client,
-                    f"{settings.tesla_api_base_url}/api/1/vehicles/{vehicle['vin']}/command/charge_stop",
+                    f"{command_base_url}/api/1/vehicles/{vehicle['vin']}/command/charge_stop",
                     token,
                 )
             except httpx.HTTPError as exc:
@@ -192,7 +200,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
         "applied": True,
         "target_amps": requested_amps,
         "active_vehicle_count": active_vehicle_count,
-        "detail": f"Applied a combined {requested_amps}A target across {active_vehicle_count} Tesla vehicle(s).",
+        "detail": f"Applied a combined {requested_amps}A target across {active_vehicle_count} Tesla vehicle(s) through the Tesla Vehicle Command Proxy.",
         "commands": command_results,
         "notes": notes,
     }

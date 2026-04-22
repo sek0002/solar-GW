@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     tesla_public_key_path: str = ".data/tesla/public-key.pem"
     tesla_private_key_path: str = ".data/tesla/private-key.pem"
     tesla_auto_generate_keys: bool = True
+    tesla_vehicle_command_proxy_url: str | None = None
     wall_connector_name: str = "Wall Connector 3"
     wall_connector_location: str = "Garage"
     wall_connector_max_kw: float = 11.0

@@ -106,13 +106,12 @@ body {
   display: inline-block;
 }
 
-.header-menu summary {
-  list-style: none;
+.header-menu .auth-link {
   cursor: pointer;
   user-select: none;
 }
 
-.header-menu summary::after {
+.header-menu .auth-link::after {
   content: "";
   width: 14px;
   height: 14px;
@@ -123,16 +122,12 @@ body {
   transition: transform 160ms ease;
 }
 
-.header-menu summary::-webkit-details-marker {
-  display: none;
-}
-
-.header-menu[open] summary {
+.header-menu.is-open .auth-link {
   background: rgba(255, 255, 255, 1);
   border-color: rgba(36, 170, 255, 1);
 }
 
-.header-menu[open] summary::after {
+.header-menu.is-open .auth-link::after {
   transform: rotate(-135deg) translate(-2px, 2px);
 }
 
@@ -153,7 +148,7 @@ body {
   z-index: 20;
 }
 
-.header-menu:not([open]) .header-menu-list {
+.header-menu-list[hidden] {
   display: none;
 }
 

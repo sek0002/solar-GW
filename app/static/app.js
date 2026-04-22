@@ -785,6 +785,40 @@ function toggleAutomationPanel() {
   renderAutomationPanel(window.__INITIAL_DASHBOARD__.automation_panel || {});
 }
 
+function setupHeaderMenu() {
+  const menuRoot = document.getElementById("header-menu");
+  const toggle = document.getElementById("header-menu-toggle");
+  const menuList = document.getElementById("header-menu-list");
+  if (!menuRoot || !toggle || !menuList) return;
+
+  const setOpen = (open) => {
+    menuRoot.classList.toggle("is-open", open);
+    menuList.hidden = !open;
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+
+  toggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setOpen(menuList.hidden);
+  });
+
+  menuList.querySelectorAll("a").forEach((link) => {
+    link.addEventListener("click", () => setOpen(false));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!menuRoot.contains(event.target)) {
+      setOpen(false);
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setOpen(false);
+    }
+  });
+}
+
 document.getElementById("automation-toggle")?.addEventListener("click", toggleAutomationPanel);
 document.getElementById("charge-toggle")?.addEventListener("click", toggleAutomationPanel);
 
@@ -822,4 +856,5 @@ async function refreshDashboard() {
 }
 
 renderDashboard(initialData);
+setupHeaderMenu();
 window.setInterval(refreshDashboard, refreshSeconds * 1000);

@@ -27,11 +27,11 @@
           <h1>{{ settings.dashboard_title }}</h1>
         </div>
         <div class="topbar-side">
-          <details class="header-menu">
-            <summary class="auth-link">
+          <div class="header-menu" id="header-menu">
+            <button class="auth-link" id="header-menu-toggle" type="button" aria-haspopup="menu" aria-expanded="false">
               <span class="header-menu-trigger-label">Menu</span>
-            </summary>
-            <nav class="header-menu-list" aria-label="Header actions">
+            </button>
+            <nav class="header-menu-list" id="header-menu-list" aria-label="Header actions" hidden>
               {% if tesla_oauth_enabled %}
               <a class="header-menu-link" href="{% if tesla_connected %}/auth/tesla/logout{% else %}/auth/tesla/login{% endif %}">
                 <span class="header-menu-icon" aria-hidden="true">{% if tesla_connected %}↻{% else %}↗{% endif %}</span>
@@ -46,7 +46,7 @@
               <a class="header-menu-link" href="/logout"><span class="header-menu-icon" aria-hidden="true">⎋</span><span class="header-menu-label">Log out</span></a>
               {% endif %}
             </nav>
-          </details>
+          </div>
         </div>
       </header>
       <div class="provider-strip">

@@ -67,6 +67,7 @@ For the OAuth flow, set:
 - `TESLA_PUBLIC_KEY_PATH`
 - `TESLA_PRIVATE_KEY_PATH`
 - `TESLA_AUTO_GENERATE_KEYS`
+- `TESLA_VEHICLE_COMMAND_PROXY_URL`
 - `TESLA_VEHICLE_VINS`
 - `WALL_CONNECTOR_NAME`
 - `WALL_CONNECTOR_LOCATION`
@@ -77,6 +78,7 @@ Then open `/auth/tesla/login` or click the dashboard connect button.
 If Tesla vehicle access is still blocked after OAuth, use the dashboard's `Pair Tesla Key` action to open Tesla's mobile-app pairing flow for the configured partner domain.
 The app also serves the Tesla well-known public-key route at `/.well-known/appspecific/com.tesla.3p.public-key.pem` and can auto-generate a local EC keypair for that endpoint.
 There is also an authenticated `Tesla Setup` page in the app that checks the public-key URL and can call Tesla's partner registration endpoint using your client credentials.
+For signed vehicle charge commands such as manual amp control, set `TESLA_VEHICLE_COMMAND_PROXY_URL` to your Tesla Vehicle Command Proxy base URL.
 
 For the manual token flow, set:
 
