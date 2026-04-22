@@ -5,7 +5,7 @@ from urllib.parse import parse_qs
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -53,13 +53,20 @@ app = FastAPI(title="solar-GW")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-PUBLIC_PATHS = {"/login", WELL_KNOWN_TESLA_PUBLIC_KEY_PATH}
+PUBLIC_PATHS = {
+    "/login",
+    "/assets/app.js",
+    "/assets/styles.css",
+    "/manifest.webmanifest",
+    "/service-worker.js",
+    WELL_KNOWN_TESLA_PUBLIC_KEY_PATH,
+}
 
 
 class OTPAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if path.startswith("/static") or path in PUBLIC_PATHS:
+        if path.startswith("/static") or path.startswith("/icons/") or path in PUBLIC_PATHS:
             return await call_next(request)
 
         settings = get_settings()
@@ -77,6 +84,31 @@ class OTPAuthMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(OTPAuthMiddleware)
+
+
+@app.get("/assets/styles.css")
+async def styles_asset() -> FileResponse:
+    return FileResponse(BASE_DIR / "static" / "styles.css", media_type="text/css")
+
+
+@app.get("/assets/app.js")
+async def app_script_asset() -> FileResponse:
+    return FileResponse(BASE_DIR / "static" / "app.js", media_type="application/javascript")
+
+
+@app.get("/service-worker.js")
+async def service_worker_asset() -> FileResponse:
+    return FileResponse(BASE_DIR / "static" / "service-worker.js", media_type="application/javascript")
+
+
+@app.get("/manifest.webmanifest")
+async def manifest_asset() -> FileResponse:
+    return FileResponse(BASE_DIR / "static" / "manifest.webmanifest", media_type="application/manifest+json")
+
+
+@app.get("/icons/{icon_name}")
+async def icon_asset(icon_name: str) -> FileResponse:
+    return FileResponse(BASE_DIR / "static" / "icons" / icon_name)
 
 
 def _set_auth_cookie(response: RedirectResponse, settings: Settings, token: str) -> None:

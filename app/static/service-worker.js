@@ -1,11 +1,11 @@
 const CACHE_NAME = "solar-gw-v2";
 const STATIC_ASSETS = [
   "/login",
-  "/static/styles.css",
-  "/static/app.js",
-  "/static/manifest.webmanifest",
-  "/static/icons/icon-192.png",
-  "/static/icons/icon-512.png"
+  "/assets/styles.css",
+  "/assets/app.js",
+  "/manifest.webmanifest",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -31,7 +31,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/static/") || url.pathname === "/login") {
+  if (
+    url.pathname.startsWith("/assets/") ||
+    url.pathname.startsWith("/icons/") ||
+    url.pathname === "/login" ||
+    url.pathname === "/manifest.webmanifest"
+  ) {
     event.respondWith(
       caches.match(request).then((cached) => {
         if (cached) return cached;
