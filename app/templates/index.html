@@ -29,6 +29,9 @@
               {% if tesla_connected %}Disconnect Tesla{% else %}Connect Tesla{% endif %}
             </a>
             {% endif %}
+            {% if tesla_pairing_url %}
+            <a class="auth-link" href="/auth/tesla/pair">Pair Tesla Key</a>
+            {% endif %}
           </div>
         </div>
       </header>
