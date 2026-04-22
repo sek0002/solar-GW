@@ -504,6 +504,25 @@ function buildChartState(filterFn, activeKey, hours) {
   return { datasets, windowStart, windowEnd };
 }
 
+function getPowerScaleBounds(datasets, options = {}) {
+  if (!options.forcePowerZero) {
+    return { min: options.powerMin ?? null, max: null };
+  }
+
+  const powerValues = datasets
+    .filter((dataset) => dataset.yAxisID === "power")
+    .flatMap((dataset) => dataset.data.map((point) => point?.y))
+    .filter((value) => Number.isFinite(value));
+
+  if (!powerValues.length) {
+    return { min: 0, max: 1 };
+  }
+
+  const maxValue = Math.max(...powerValues, 0);
+  const paddedMax = Math.max(1, Math.ceil(maxValue * 1.15 * 10) / 10);
+  return { min: 0, max: paddedMax };
+}
+
 function syncChartWindowControls(target) {
   const hours = target === "vehicle" ? vehicleChartWindowHours : energyChartWindowHours;
   const rangeId = target === "vehicle" ? "vehicle-chart-window-range" : "chart-window-range";
@@ -555,7 +574,8 @@ function renderChartLegend(rootId, filterFn, activeKey, renderFn, setActiveKey) 
 
 function createChart(canvas, datasets, hours, windowStart, windowEnd, options = {}) {
   const stepHours = getXAxisStepHours(hours);
-  const powerMin = options.powerMin ?? null;
+  const forcePowerZero = options.forcePowerZero ?? false;
+  const powerScale = getPowerScaleBounds(datasets, options);
   return new window.Chart(canvas, {
       type: "line",
       data: { datasets },
@@ -601,7 +621,12 @@ function createChart(canvas, datasets, hours, windowStart, windowEnd, options = 
           },
           power: {
             position: "left",
-            min: powerMin,
+            min: powerScale.min,
+            max: powerScale.max,
+            suggestedMin: forcePowerZero ? 0 : undefined,
+            beginAtZero: forcePowerZero,
+            bounds: forcePowerZero ? "ticks" : undefined,
+            grace: forcePowerZero ? 0 : undefined,
             ticks: {
               color: "rgba(156, 183, 180, 0.88)",
               callback: (value) => `${value} kW`,
@@ -624,12 +649,18 @@ function createChart(canvas, datasets, hours, windowStart, windowEnd, options = 
 }
 
 function updateChart(chart, datasets, hours, windowStart, windowEnd, options = {}) {
+  const powerScale = getPowerScaleBounds(datasets, options);
   chart.data.datasets = datasets;
   chart.options.scales.x.min = windowStart;
   chart.options.scales.x.max = windowEnd;
   chart.options.scales.x.ticks.stepSize = getXAxisStepHours(hours) * 60 * 60 * 1000;
   chart.options.scales.x.ticks.callback = (value) => formatXAxisLabel(value, hours);
-  chart.options.scales.power.min = options.powerMin ?? null;
+  chart.options.scales.power.min = powerScale.min;
+  chart.options.scales.power.max = powerScale.max;
+  chart.options.scales.power.suggestedMin = options.forcePowerZero ? 0 : undefined;
+  chart.options.scales.power.beginAtZero = Boolean(options.forcePowerZero);
+  chart.options.scales.power.bounds = options.forcePowerZero ? "ticks" : undefined;
+  chart.options.scales.power.grace = options.forcePowerZero ? 0 : undefined;
   chart.options.plugins.tooltip.callbacks.title = (items) => {
     if (!items.length) return "";
     return formatXAxisLabel(items[0].parsed.x, hours);
@@ -684,11 +715,17 @@ function renderVehicleChart() {
   );
 
   if (!vehicleChart) {
-    vehicleChart = createChart(canvas, datasets, vehicleChartWindowHours, windowStart, windowEnd, { powerMin: 0 });
+    vehicleChart = createChart(canvas, datasets, vehicleChartWindowHours, windowStart, windowEnd, {
+      powerMin: 0,
+      forcePowerZero: true,
+    });
     return;
   }
 
-  updateChart(vehicleChart, datasets, vehicleChartWindowHours, windowStart, windowEnd, { powerMin: 0 });
+  updateChart(vehicleChart, datasets, vehicleChartWindowHours, windowStart, windowEnd, {
+    powerMin: 0,
+    forcePowerZero: true,
+  });
 }
 
 function renderDashboard(data) {

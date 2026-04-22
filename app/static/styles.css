@@ -88,6 +88,7 @@ body {
 
 .header-menu {
   position: relative;
+  display: inline-block;
 }
 
 .header-menu summary {
@@ -124,8 +125,8 @@ body {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  min-width: 240px;
-  padding: 10px;
+  min-width: 250px;
+  padding: 10px 8px;
   border: 1px solid rgba(97, 230, 255, 0.14);
   border-radius: 20px;
   background:
@@ -144,23 +145,44 @@ body {
 }
 
 .header-menu-link {
-  display: block;
-  padding: 11px 13px;
-  border-radius: 14px;
-  color: var(--text);
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 16px;
+  color: var(--text) !important;
   text-decoration: none;
   border: 1px solid transparent;
   background: rgba(255, 255, 255, 0.025);
   transition:
     background 140ms ease,
     border-color 140ms ease,
-    transform 140ms ease;
+    transform 140ms ease,
+    color 140ms ease;
+}
+
+.header-menu-link:visited {
+  color: var(--text) !important;
+}
+
+.header-menu-label {
+  font-size: 0.96rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .header-menu-link:hover {
-  background: rgba(97, 230, 255, 0.08);
-  border-color: rgba(97, 230, 255, 0.18);
-  transform: translateY(-1px);
+  background: linear-gradient(90deg, rgba(97, 230, 255, 0.16), rgba(97, 230, 255, 0.07));
+  border-color: rgba(97, 230, 255, 0.24);
+  transform: translateY(-1px) scale(1.01);
+}
+
+.header-menu-link:focus-visible {
+  outline: none;
+  border-color: rgba(97, 230, 255, 0.42);
+  background: linear-gradient(90deg, rgba(97, 230, 255, 0.16), rgba(97, 230, 255, 0.07));
+  box-shadow: 0 0 0 3px rgba(97, 230, 255, 0.12);
 }
 
 .login-body {
