@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import copy
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -8,6 +9,13 @@ import httpx
 from app.config import Settings, parse_csv
 from app.providers.base import ProviderSnapshot
 from app.services.tesla_oauth import build_pairing_url, get_public_key_url, get_valid_access_token
+
+TESLA_SNAPSHOT_TTL = timedelta(minutes=2)
+_TESLA_SNAPSHOT_CACHE: dict[str, Any] = {
+    "captured_at": None,
+    "cache_key": None,
+    "snapshot": None,
+}
 
 
 def _series_key(name: str, suffix: str) -> str:
@@ -29,11 +37,51 @@ async def _get_json(client: httpx.AsyncClient, url: str, token: str) -> Any:
     return response.json()
 
 
+def _build_cache_key(settings: Settings, vins: list[str], token: str) -> str:
+    token_hint = token[-12:] if token else ""
+    return "|".join(
+        [
+            settings.tesla_api_base_url,
+            ",".join(vins),
+            token_hint,
+        ]
+    )
+
+
+def _get_cached_snapshot(cache_key: str) -> ProviderSnapshot | None:
+    captured_at = _TESLA_SNAPSHOT_CACHE.get("captured_at")
+    snapshot = _TESLA_SNAPSHOT_CACHE.get("snapshot")
+    if (
+        _TESLA_SNAPSHOT_CACHE.get("cache_key") != cache_key
+        or captured_at is None
+        or snapshot is None
+        or datetime.now(timezone.utc) - captured_at > TESLA_SNAPSHOT_TTL
+    ):
+        return None
+    return copy.deepcopy(snapshot)
+
+
+def _store_cached_snapshot(cache_key: str, snapshot: ProviderSnapshot) -> None:
+    _TESLA_SNAPSHOT_CACHE["cache_key"] = cache_key
+    _TESLA_SNAPSHOT_CACHE["captured_at"] = datetime.now(timezone.utc)
+    _TESLA_SNAPSHOT_CACHE["snapshot"] = copy.deepcopy(snapshot)
+
+
+def invalidate_tesla_snapshot_cache() -> None:
+    _TESLA_SNAPSHOT_CACHE["cache_key"] = None
+    _TESLA_SNAPSHOT_CACHE["captured_at"] = None
+    _TESLA_SNAPSHOT_CACHE["snapshot"] = None
+
+
 async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Settings) -> ProviderSnapshot | None:
     vins = parse_csv(settings.tesla_vehicle_vins)
     token = await get_valid_access_token(settings)
     if not token or not vins:
         return None
+    cache_key = _build_cache_key(settings, vins, token)
+    cached_snapshot = _get_cached_snapshot(cache_key)
+    if cached_snapshot is not None:
+        return cached_snapshot
 
     vehicles: list[dict[str, Any]] = []
     metrics: list[dict[str, Any]] = []
@@ -199,7 +247,7 @@ async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Setti
         notes.append(
             "Some vehicles also require 'Allow Third-Party App Data Streaming' to be enabled in the vehicle Safety settings."
         )
-        return ProviderSnapshot(
+        snapshot = ProviderSnapshot(
             name="Tesla Charging",
             kind="hybrid",
             status="degraded",
@@ -228,8 +276,10 @@ async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Setti
             ],
             notes=notes,
         )
+        _store_cached_snapshot(cache_key, snapshot)
+        return snapshot
 
-    return ProviderSnapshot(
+    snapshot = ProviderSnapshot(
         name="Tesla Charging",
         kind="hybrid",
         status="connected" if any_vehicle_visible else "disconnected",
@@ -285,3 +335,5 @@ async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Setti
             *notes,
         ],
     )
+    _store_cached_snapshot(cache_key, snapshot)
+    return snapshot

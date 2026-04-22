@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import Settings, get_settings
+from app.providers.tesla import invalidate_tesla_snapshot_cache
 from app.services.auth import (
     clear_login_failures,
     create_session_token,
@@ -250,6 +251,7 @@ async def automation_rule_toggle(request: Request, payload: RuleTogglePayload, s
     update_rule(payload.rule_id, payload.enabled)
     data = await build_dashboard_data(settings)
     command_result = await apply_automation_panel(settings, data.automation_panel)
+    invalidate_tesla_snapshot_cache()
     update_manual_charge_result(command_result)
     return {"ok": True, "tesla": command_result}
 
@@ -260,6 +262,7 @@ async def automation_global_toggle(request: Request, payload: GlobalAutomationPa
     update_global_automation(payload.enabled)
     data = await build_dashboard_data(settings)
     command_result = await apply_automation_panel(settings, data.automation_panel)
+    invalidate_tesla_snapshot_cache()
     update_manual_charge_result(command_result)
     return {"ok": True, "tesla": command_result}
 
@@ -270,6 +273,7 @@ async def automation_manual_charge(request: Request, payload: ManualChargePayloa
     update_manual_charge(payload.enabled, payload.target_amps)
     data = await build_dashboard_data(settings)
     command_result = await apply_automation_panel(settings, data.automation_panel)
+    invalidate_tesla_snapshot_cache()
     update_manual_charge_result(command_result)
     return {"ok": True, "tesla": command_result}
 
