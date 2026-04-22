@@ -102,6 +102,10 @@ class ManualChargeControl(BaseModel):
     enabled: bool = False
     target_amps: int = 10
     target_kw: float = 2.3
+    status: str = "idle"
+    detail: str | None = None
+    notes: list[str] = Field(default_factory=list)
+    updated_at: datetime | None = None
 
 
 class AutomationPanel(BaseModel):

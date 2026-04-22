@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
@@ -23,6 +24,10 @@ class PersistedAutomationRule(BaseModel):
 class PersistedManualCharge(BaseModel):
     enabled: bool = False
     target_amps: int = 10
+    status: str = "idle"
+    detail: str | None = None
+    notes: list[str] = Field(default_factory=list)
+    updated_at: str | None = None
 
 
 class PersistedAutomationState(BaseModel):
@@ -103,6 +108,16 @@ def update_manual_charge(enabled: bool, target_amps: int) -> PersistedAutomation
     state = load_persisted_state()
     state.manual_charge.enabled = enabled
     state.manual_charge.target_amps = clamp_amps(target_amps)
+    save_persisted_state(state)
+    return state
+
+
+def update_manual_charge_result(result: dict[str, Any]) -> PersistedAutomationState:
+    state = load_persisted_state()
+    state.manual_charge.status = str(result.get("status") or "idle")
+    state.manual_charge.detail = result.get("detail")
+    state.manual_charge.notes = [str(note) for note in result.get("notes", []) if note]
+    state.manual_charge.updated_at = datetime.now(LOCAL_TZ).isoformat()
     save_persisted_state(state)
     return state
 
@@ -220,6 +235,12 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
         enabled=state.manual_charge.enabled,
         target_amps=clamp_amps(state.manual_charge.target_amps),
         target_kw=amps_to_kw(clamp_amps(state.manual_charge.target_amps)),
+        status=state.manual_charge.status,
+        detail=state.manual_charge.detail,
+        notes=list(state.manual_charge.notes),
+        updated_at=datetime.fromisoformat(state.manual_charge.updated_at)
+        if state.manual_charge.updated_at
+        else None,
     )
 
     effective_mode = "Idle"

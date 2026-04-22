@@ -2,6 +2,7 @@ const initialData = window.__INITIAL_DASHBOARD__ || {};
 const refreshSeconds = Number(document.body.dataset.refresh || "30");
 const chartStore = new Map();
 const lastKnownVehicleBatteryLevels = new Map();
+const lastKnownTeslaVehicles = new Map();
 let energyChart = null;
 let vehicleChart = null;
 let activeEnergyChartKey = null;
@@ -10,6 +11,7 @@ let energyChartWindowHours = 6;
 let vehicleChartWindowHours = 6;
 let automationPanelOpen = false;
 const MANUAL_CHARGE_STORAGE_KEY = "solar-gw-manual-charge";
+const TESLA_VEHICLE_STORAGE_KEY = "solar-gw-tesla-vehicles";
 
 function formatValue(value, unit = "") {
   if (value === null || value === undefined || value === "") return "N/A";
@@ -79,6 +81,87 @@ function getVehicleCacheKey(vehicle) {
   return vehicle.vin || vehicle.name;
 }
 
+function loadTeslaVehicleCache() {
+  try {
+    const raw = window.localStorage.getItem(TESLA_VEHICLE_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    parsed.forEach((vehicle) => {
+      if (!vehicle?.name && !vehicle?.vin) return;
+      lastKnownTeslaVehicles.set(getVehicleCacheKey(vehicle), vehicle);
+      if (vehicle.battery_level !== null && vehicle.battery_level !== undefined) {
+        lastKnownVehicleBatteryLevels.set(getVehicleCacheKey(vehicle), Number(vehicle.battery_level));
+      }
+    });
+  } catch (_error) {
+    // Ignore cache hydration failures and continue with live data.
+  }
+}
+
+function saveTeslaVehicleCache() {
+  try {
+    window.localStorage.setItem(
+      TESLA_VEHICLE_STORAGE_KEY,
+      JSON.stringify(Array.from(lastKnownTeslaVehicles.values()).slice(-8)),
+    );
+  } catch (_error) {
+    // Ignore storage failures and keep the UI functional.
+  }
+}
+
+function hydrateTeslaVehicles(vehicles) {
+  const liveVehicles = Array.isArray(vehicles) ? vehicles : [];
+  const mergedVehicles = liveVehicles.map((vehicle) => {
+    if (vehicle.source !== "Tesla Vehicle") {
+      return vehicle;
+    }
+
+    const cacheKey = getVehicleCacheKey(vehicle);
+    const cached = lastKnownTeslaVehicles.get(cacheKey) || {};
+    const merged = {
+      ...cached,
+      ...vehicle,
+      battery_level: vehicle.battery_level ?? cached.battery_level ?? null,
+      charge_power_kw: vehicle.charge_power_kw ?? cached.charge_power_kw ?? null,
+      range_km: vehicle.range_km ?? cached.range_km ?? null,
+      plugged_in: vehicle.plugged_in ?? cached.plugged_in ?? null,
+      location: vehicle.location ?? cached.location ?? null,
+      charging_state: vehicle.charging_state ?? cached.charging_state ?? null,
+      source: vehicle.source,
+      stale: false,
+    };
+    lastKnownTeslaVehicles.set(cacheKey, merged);
+    if (merged.battery_level !== null && merged.battery_level !== undefined) {
+      lastKnownVehicleBatteryLevels.set(cacheKey, Number(merged.battery_level));
+    }
+    return merged;
+  });
+
+  const liveTeslaKeys = new Set(
+    liveVehicles
+      .filter((vehicle) => vehicle.source === "Tesla Vehicle")
+      .map((vehicle) => getVehicleCacheKey(vehicle)),
+  );
+
+  const staleVehicles = Array.from(lastKnownTeslaVehicles.entries())
+    .filter(([key]) => !liveTeslaKeys.has(key))
+    .map(([, vehicle]) => ({
+      ...vehicle,
+      stale: true,
+      source: vehicle.source || "Tesla Vehicle",
+    }));
+
+  if (mergedVehicles.some((vehicle) => vehicle.source === "Tesla Vehicle") || staleVehicles.length) {
+    saveTeslaVehicleCache();
+  }
+
+  return [
+    ...mergedVehicles,
+    ...staleVehicles,
+  ];
+}
+
 function getVehicleStatusMeta(vehicle) {
   const state = String(vehicle.charging_state || "").toLowerCase();
   if (state === "charging") {
@@ -116,7 +199,10 @@ function renderBatteryRail(vehicles, batteries) {
         const disconnected = String(vehicle.charging_state || "").toLowerCase() === "disconnected";
         return {
           name: vehicle.name,
-          source: disconnected && (vehicle.battery_level === null || vehicle.battery_level === undefined) ? "Tesla EV • Last known" : "Tesla EV",
+          source:
+            vehicle.stale || (disconnected && (vehicle.battery_level === null || vehicle.battery_level === undefined))
+              ? "Tesla EV • Last known"
+              : "Tesla EV",
           level,
           detail: vehicle.charging_state || "Unknown",
         };
@@ -228,11 +314,11 @@ function renderVehicles(vehicles) {
         <article class="entity-card">
           <div class="entity-meta">
             <span>${vehicle.name}</span>
-            <span class="pill">${vehicle.source}</span>
+            <span class="pill">${vehicle.stale ? `${vehicle.source} • Last known` : vehicle.source}</span>
           </div>
           <div class="entity-main">
             <strong>${formatValue(vehicle.battery_level, "%")}</strong>
-            <span>${vehicle.charging_state || "Unknown"}</span>
+            <span>${vehicle.stale ? `Last known ${vehicle.charging_state || "Unknown"}` : vehicle.charging_state || "Unknown"}</span>
           </div>
           <div class="entity-secondary">
             <span>Charge power: ${formatValue(vehicle.charge_power_kw, "kW")}</span>
@@ -382,10 +468,23 @@ function renderAutomationPanel(panel) {
   manualSlider.value = String(targetAmps);
   saveManualChargeState(manualChargeEnabled, targetAmps);
   updateManualChargeReadout(targetAmps);
-  document.getElementById("manual-charge-title").textContent = manualEnabled.checked ? "Manual charge on" : "Manual charge off";
-  document.getElementById("manual-charge-detail").textContent = manualEnabled.checked
-    ? `${targetAmps}A combined target active`
-    : `Ready at ${targetAmps}A / ${((targetAmps * 230) / 1000).toFixed(2)} kW`;
+  const manualStatus = panel.manual_charge?.status || "idle";
+  const manualNotes = Array.isArray(panel.manual_charge?.notes) ? panel.manual_charge.notes : [];
+  document.getElementById("manual-charge-title").textContent = manualEnabled.checked
+    ? manualStatus === "error"
+      ? "Manual charge issue"
+      : manualStatus === "partial"
+        ? "Manual charge partial"
+        : "Manual charge on"
+    : "Manual charge off";
+  document.getElementById("manual-charge-detail").textContent =
+    panel.manual_charge?.detail ||
+    (manualEnabled.checked
+      ? `${targetAmps}A combined target active`
+      : `Ready at ${targetAmps}A / ${((targetAmps * 230) / 1000).toFixed(2)} kW`);
+  if (manualNotes.length) {
+    document.getElementById("manual-charge-detail").textContent += ` ${manualNotes[0]}`;
+  }
 
   root.querySelectorAll("[data-rule-id]").forEach((input) => {
     input.addEventListener("change", async (event) => {
@@ -416,7 +515,7 @@ function renderAutomationPanel(panel) {
   manualEnabled.onchange = async () => {
     document.getElementById("manual-charge-title").textContent = manualEnabled.checked ? "Manual charge on" : "Manual charge off";
     saveManualChargeState(manualEnabled.checked, manualSlider.value);
-    await fetch("/api/automation/manual-charge", {
+    const response = await fetch("/api/automation/manual-charge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -424,6 +523,10 @@ function renderAutomationPanel(panel) {
         target_amps: Number(manualSlider.value),
       }),
     });
+    const payload = await response.json().catch(() => null);
+    if (payload?.tesla?.detail) {
+      document.getElementById("manual-charge-detail").textContent = payload.tesla.detail;
+    }
     await refreshDashboard();
   };
 
@@ -434,7 +537,7 @@ function renderAutomationPanel(panel) {
   };
   manualSlider.onchange = async () => {
     saveManualChargeState(manualEnabled.checked, manualSlider.value);
-    await fetch("/api/automation/manual-charge", {
+    const response = await fetch("/api/automation/manual-charge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -442,6 +545,10 @@ function renderAutomationPanel(panel) {
         target_amps: Number(manualSlider.value),
       }),
     });
+    const payload = await response.json().catch(() => null);
+    if (payload?.tesla?.detail) {
+      document.getElementById("manual-charge-detail").textContent = payload.tesla.detail;
+    }
     await refreshDashboard();
   };
 }
@@ -662,6 +769,10 @@ function createChart(canvas, datasets, hours, windowStart, windowEnd, options = 
             beginAtZero: forcePowerZero,
             bounds: forcePowerZero ? "ticks" : undefined,
             grace: forcePowerZero ? 0 : undefined,
+            afterBuildTicks(scale) {
+              if (!forcePowerZero) return;
+              scale.ticks = scale.ticks.filter((tick) => Number(tick.value) >= 0);
+            },
             ticks: {
               color: "rgba(156, 183, 180, 0.88)",
               callback: (value) => `${value} kW`,
@@ -765,6 +876,7 @@ function renderVehicleChart() {
 
 function renderDashboard(data) {
   mergeEnergySeries(data.energy_chart || []);
+  const displayVehicles = hydrateTeslaVehicles(data.vehicles || []);
   renderPowerFlow(data.power_flow || {});
   syncChartWindowControls("energy");
   syncChartWindowControls("vehicle");
@@ -774,9 +886,9 @@ function renderDashboard(data) {
   renderChargers(data.chargers || []);
   renderBatteries(data.batteries || []);
   renderPlants(data.plants || []);
-  renderVehicles(data.vehicles || []);
-  renderBatteryRail(data.vehicles || [], data.batteries || []);
-  renderSources(data.sources || [], data.vehicles || []);
+  renderVehicles(displayVehicles);
+  renderBatteryRail(displayVehicles, data.batteries || []);
+  renderSources(data.sources || [], displayVehicles);
   renderUpdatedAt(data.updated_at);
 }
 
@@ -849,12 +961,21 @@ async function refreshDashboard() {
     const response = await fetch("/api/dashboard");
     const data = await response.json();
     window.__INITIAL_DASHBOARD__ = data;
-    renderDashboard(data);
+    try {
+      renderDashboard(data);
+    } catch (error) {
+      console.error("Dashboard render failed", error);
+    }
   } catch (error) {
     console.error("Dashboard refresh failed", error);
   }
 }
 
-renderDashboard(initialData);
 setupHeaderMenu();
+loadTeslaVehicleCache();
+try {
+  renderDashboard(initialData);
+} catch (error) {
+  console.error("Initial dashboard render failed", error);
+}
 window.setInterval(refreshDashboard, refreshSeconds * 1000);

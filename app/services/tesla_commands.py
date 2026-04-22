@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
@@ -40,6 +41,27 @@ async def _post_command(
     return {"response": body}
 
 
+async def _wait_for_vehicle_online(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    vin: str,
+    token: str,
+    attempts: int = 9,
+    delay_seconds: float = 5.0,
+) -> tuple[dict[str, Any] | None, str]:
+    last_meta: dict[str, Any] | None = None
+    last_state = "unknown"
+    for attempt in range(attempts):
+        meta_payload = await _get_json(client, f"{settings.tesla_api_base_url}/api/1/vehicles/{vin}", token)
+        last_meta = meta_payload.get("response", {})
+        last_state = str(last_meta.get("state", "unknown")).lower()
+        if last_state == "online":
+            return (last_meta, last_state)
+        if attempt < attempts - 1:
+            await asyncio.sleep(delay_seconds)
+    return (last_meta, last_state)
+
+
 def _allocate_combined_amps(total_amps: int, vehicle_count: int) -> tuple[list[int], int]:
     requested = max(MIN_VEHICLE_AMPS, min(MAX_VEHICLE_AMPS, int(total_amps)))
     if vehicle_count <= 0:
@@ -60,6 +82,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
     if not enabled:
         return {
             "applied": False,
+            "status": "idle",
             "target_amps": requested_amps,
             "detail": "Manual charge override was disabled, so no Tesla charge command was sent.",
         }
@@ -67,6 +90,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
     if not token:
         return {
             "applied": False,
+            "status": "error",
             "target_amps": requested_amps,
             "detail": "Tesla OAuth token is unavailable, so charge amps could not be applied.",
         }
@@ -74,6 +98,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
     if not vins:
         return {
             "applied": False,
+            "status": "error",
             "target_amps": requested_amps,
             "detail": "No Tesla vehicle VINs are configured.",
         }
@@ -81,6 +106,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
     if not command_base_url:
         return {
             "applied": False,
+            "status": "error",
             "target_amps": requested_amps,
             "detail": "Tesla Vehicle Command Proxy is not configured. Set TESLA_VEHICLE_COMMAND_PROXY_URL to send signed vehicle charge commands.",
         }
@@ -101,7 +127,24 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
             vehicle_name = meta.get("display_name") or vin[-6:]
             vehicle_state_name = str(meta.get("state", "unknown")).lower()
 
-            if vehicle_state_name != "online":
+            if vehicle_state_name in {"asleep", "offline"}:
+                notes.append(f"Waking {vehicle_name} from {vehicle_state_name}.")
+                try:
+                    await _post_command(
+                        client,
+                        f"{settings.tesla_api_base_url}/api/1/vehicles/{vin}/wake_up",
+                        token,
+                    )
+                    meta, vehicle_state_name = await _wait_for_vehicle_online(client, settings, vin, token)
+                    vehicle_name = (meta or {}).get("display_name") or vehicle_name
+                    if vehicle_state_name != "online":
+                        notes.append(f"{vehicle_name} did not come online after wake-up (state: {vehicle_state_name}).")
+                        continue
+                    notes.append(f"{vehicle_name} is online after wake-up.")
+                except httpx.HTTPError as exc:
+                    notes.append(f"Wake-up failed for {vehicle_name}: {exc}")
+                    continue
+            elif vehicle_state_name != "online":
                 notes.append(f"{vehicle_name} is {vehicle_state_name}; skipping manual charge command.")
                 continue
 
@@ -129,6 +172,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
         if not controllable:
             return {
                 "applied": False,
+                "status": "error",
                 "target_amps": requested_amps,
                 "detail": "No plugged-in Tesla vehicles were available for manual charge control.",
                 "notes": notes,
@@ -138,6 +182,8 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
         active_vehicles = controllable[:active_vehicle_count]
         parked_vehicles = controllable[active_vehicle_count:]
         command_results: list[dict[str, Any]] = []
+        successful_commands = 0
+        failed_commands = 0
 
         for vehicle, amps in zip(active_vehicles, allocations):
             try:
@@ -154,6 +200,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
                 )
             except httpx.HTTPError as exc:
                 notes.append(f"Tesla command failed for {vehicle['name']}: {exc}")
+                failed_commands += 1
                 command_results.append(
                     {
                         "vehicle": vehicle["name"],
@@ -162,6 +209,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
                     }
                 )
                 continue
+            successful_commands += 1
             command_results.append(
                 {
                     "vehicle": vehicle["name"],
@@ -180,6 +228,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
                 )
             except httpx.HTTPError as exc:
                 notes.append(f"Tesla charge stop failed for {vehicle['name']}: {exc}")
+                failed_commands += 1
                 command_results.append(
                     {
                         "vehicle": vehicle["name"],
@@ -188,6 +237,7 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
                     }
                 )
                 continue
+            successful_commands += 1
             command_results.append(
                 {
                     "vehicle": vehicle["name"],
@@ -196,11 +246,22 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
                 }
             )
 
+    status = "success"
+    if successful_commands and failed_commands:
+        status = "partial"
+    elif failed_commands and not successful_commands:
+        status = "error"
+
     return {
-        "applied": True,
+        "applied": successful_commands > 0,
+        "status": status,
         "target_amps": requested_amps,
         "active_vehicle_count": active_vehicle_count,
-        "detail": f"Applied a combined {requested_amps}A target across {active_vehicle_count} Tesla vehicle(s) through the Tesla Vehicle Command Proxy.",
+        "detail": (
+            f"Applied a combined {requested_amps}A target across {active_vehicle_count} Tesla vehicle(s) through the Tesla Vehicle Command Proxy."
+            if successful_commands > 0
+            else "Tesla charge commands did not complete successfully."
+        ),
         "commands": command_results,
         "notes": notes,
     }
