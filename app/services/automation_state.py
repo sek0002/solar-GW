@@ -150,17 +150,15 @@ def _latest_value(data: DashboardData, key: str) -> float | None:
     return rows[-1][1] if rows else None
 
 
-def _sustained_threshold(data: DashboardData, key: str, threshold: float, minutes: int, above: bool = True) -> bool:
+def _average_over_window(data: DashboardData, key: str, minutes: int) -> float | None:
     rows = _series_values(data, key)
     if not rows:
-        return False
+        return None
     cutoff = datetime.now(LOCAL_TZ) - timedelta(minutes=minutes)
     recent = [(ts, value) for ts, value in rows if ts.astimezone(LOCAL_TZ) >= cutoff]
     if not recent:
-        return False
-    if above:
-        return all(value >= threshold for _, value in recent)
-    return all(value < threshold for _, value in recent)
+        return None
+    return sum(value for _, value in recent) / len(recent)
 
 
 def build_automation_panel(data: DashboardData) -> AutomationPanel:
@@ -168,6 +166,7 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
     now = datetime.now(LOCAL_TZ)
     battery_soc = _latest_value(data, "growatt_soc_pct")
     solar_kw = _latest_value(data, "solar_input_kw") or 0.0
+    solar_kw_avg_10m = _average_over_window(data, "solar_input_kw", minutes=10)
     tesla_vehicle_connected = any(
         vehicle.source == "Tesla Vehicle" and (vehicle.plugged_in or str(vehicle.charging_state or "").lower() in {"charging", "stopped", "complete"})
         for vehicle in data.vehicles
@@ -183,7 +182,7 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
     solar_match_active = (
         rule_2_enabled
         and (battery_soc or 0.0) > 40
-        and _sustained_threshold(data, "solar_input_kw", threshold=1.0, minutes=10, above=True)
+        and (solar_kw_avg_10m or 0.0) > 1.0
     )
     battery_floor_active = rule_3_enabled and battery_soc is not None and battery_soc < 40
     night_trickle_active = rule_4_enabled and 0 <= now.hour < 6 and (battery_soc or 0.0) > 50
@@ -196,7 +195,8 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
         battery_floor_active = False
         night_trickle_active = False
 
-    solar_match_amps = clamp_amps(round((solar_kw * 1000.0) / VOLTAGE)) if solar_kw > 0 else MIN_AMPS
+    solar_match_kw = max(0.0, solar_kw - 0.6)
+    solar_match_amps = clamp_amps(round((solar_match_kw * 1000.0) / VOLTAGE)) if solar_match_kw > 0 else MIN_AMPS
     night_trickle_amps = clamp_amps(round((1.5 * 1000.0) / VOLTAGE))
 
     rules = [
@@ -225,13 +225,13 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
         AutomationRule(
             id="solar_match",
             label="Solar match",
-            description="If battery is above 40% and solar stays above 1kW for 10 minutes, match EV charging to solar. Pause if solar stays below 1kW for 10 minutes.",
+            description="If battery is above 40% and the 10-minute average solar input stays above 1kW, set EV charging to current solar input minus a 0.6kW buffer. Pause again when the 10-minute average drops back below 1kW.",
             enabled=rule_2_enabled,
             active=solar_match_active,
             detail=(
-                "Solar has held above 1kW for 10 minutes."
+                f"10-minute average solar is {solar_kw_avg_10m:.2f}kW, so EV charging is using current solar minus a 0.6kW buffer."
                 if solar_match_active
-                else "Needs battery >40% and sustained solar >1kW for 10 minutes."
+                else "Needs battery >40% and a 10-minute average solar input above 1kW."
             ),
             target_amps=solar_match_amps,
             target_kw=amps_to_kw(solar_match_amps),
@@ -298,7 +298,7 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
         effective_target_kw = amps_to_kw(30)
     elif solar_match_active:
         effective_mode = "Solar match"
-        effective_detail = "Charging should track current GoodWe solar input."
+        effective_detail = "Charging should track current GoodWe solar input with a 0.6kW buffer, enabled by the 10-minute average solar input."
         effective_target_amps = solar_match_amps
         effective_target_kw = amps_to_kw(solar_match_amps)
     elif night_trickle_active:

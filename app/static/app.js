@@ -3,8 +3,7 @@ const refreshSeconds = Number(document.body.dataset.refresh || "30");
 const chartStore = new Map();
 const lastKnownVehicleBatteryLevels = new Map();
 const lastKnownTeslaVehicles = new Map();
-const MAX_STORED_POINTS = 1440;
-const MAX_RENDERED_POINTS = 240;
+const MAX_STORED_POINTS = 10000;
 let energyChart = null;
 let vehicleChart = null;
 let activeEnergyChartKey = null;
@@ -14,6 +13,8 @@ let vehicleChartWindowHours = 6;
 let automationPanelOpen = false;
 const MANUAL_CHARGE_STORAGE_KEY = "solar-gw-manual-charge";
 const TESLA_VEHICLE_STORAGE_KEY = "solar-gw-tesla-vehicles";
+const CHART_HISTORY_STORAGE_KEY = "solar-gw-chart-history";
+const CHART_POINT_INTERVAL_MS = 2 * 60 * 1000;
 const SERIES_DEFAULTS = {
   solar_input_kw: { label: "Solar input", unit: "kW", color: "#f7c66b", axis: "power" },
   growatt_load_kw: { label: "Load consumption", unit: "kW", color: "#61e6ff", axis: "power" },
@@ -27,12 +28,13 @@ const SOURCE_ZERO_SERIES = {
   Growatt: [
     "growatt_load_kw",
     "grid_import_kw",
-    "growatt_soc_pct",
     "growatt_battery_charge_kw",
     "growatt_battery_discharge_kw",
   ],
   GoodWe: ["solar_input_kw"],
-  "Tesla Charging": ["tesla_ev_charge_kw"],
+};
+const SOURCE_AVERAGED_SERIES = {
+  Growatt: ["growatt_soc_pct"],
 };
 
 function formatValue(value, unit = "") {
@@ -132,8 +134,60 @@ function saveTeslaVehicleCache() {
   }
 }
 
+function loadChartHistoryCache() {
+  try {
+    const raw = window.localStorage.getItem(CHART_HISTORY_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    parsed.forEach((series) => {
+      if (!series?.key || !Array.isArray(series.points)) return;
+      chartStore.set(series.key, {
+        key: series.key,
+        label: series.label || series.key,
+        unit: series.unit || "",
+        color: series.color || "#ffffff",
+        axis: series.axis || "power",
+        points: new Map(trimSeriesPoints(new Map(series.points.map((point) => [point.timestamp, {
+          value: point.value ?? null,
+          state: point.state || null,
+        }])))),
+      });
+    });
+  } catch (_error) {
+    // Ignore cache hydration failures and continue with live data.
+  }
+}
+
+function saveChartHistoryCache() {
+  try {
+    const payload = Array.from(chartStore.values()).map((series) => ({
+      key: series.key,
+      label: series.label,
+      unit: series.unit,
+      color: series.color,
+      axis: series.axis,
+      points: Array.from(series.points.entries()).map(([timestamp, point]) => ({
+        timestamp,
+        value: point?.value ?? null,
+        state: point?.state || null,
+      })),
+    }));
+    window.localStorage.setItem(CHART_HISTORY_STORAGE_KEY, JSON.stringify(payload));
+  } catch (_error) {
+    // Ignore storage failures and keep the UI functional.
+  }
+}
+
 function trimSeriesPoints(points) {
   return Array.from(points.entries()).sort((a, b) => new Date(a[0]) - new Date(b[0])).slice(-MAX_STORED_POINTS);
+}
+
+function normalizeChartTimestamp(timestamp) {
+  const parsed = new Date(timestamp).getTime();
+  if (!Number.isFinite(parsed)) return null;
+  const bucket = Math.floor(parsed / CHART_POINT_INTERVAL_MS) * CHART_POINT_INTERVAL_MS;
+  return new Date(bucket).toISOString();
 }
 
 function ensureChartSeries(key, defaults = {}) {
@@ -154,15 +208,17 @@ function ensureChartSeries(key, defaults = {}) {
 }
 
 function appendChartPoint(key, timestamp, value, defaults = {}) {
-  if (!timestamp) return;
+  const normalizedTimestamp = normalizeChartTimestamp(timestamp);
+  if (!normalizedTimestamp) return;
   const series = ensureChartSeries(key, defaults);
   series.label = defaults.label || series.label;
   series.unit = defaults.unit || series.unit;
   series.color = defaults.color || series.color;
   series.axis = defaults.axis || series.axis;
-  series.points.set(timestamp, { value, state: null });
+  series.points.set(normalizedTimestamp, { value, state: null });
   series.points = new Map(trimSeriesPoints(series.points));
   chartStore.set(key, series);
+  saveChartHistoryCache();
 }
 
 function hydrateTeslaVehicles(vehicles) {
@@ -227,6 +283,22 @@ function appendDisconnectedSourcePoints(data, timestamp) {
       appendChartPoint(seriesKey, timestamp, 0, SERIES_DEFAULTS[seriesKey] || {});
     });
   });
+
+  Object.entries(SOURCE_AVERAGED_SERIES).forEach(([sourceName, seriesKeys]) => {
+    const status = sourceStatuses.get(sourceName);
+    if (status && status !== "disconnected") return;
+    seriesKeys.forEach((seriesKey) => {
+      const series = chartStore.get(seriesKey);
+      if (!series) return;
+      const recentValues = Array.from(series.points.values())
+        .map((point) => point?.value)
+        .filter((value) => Number.isFinite(value))
+        .slice(-10);
+      if (!recentValues.length) return;
+      const averageValue = recentValues.reduce((sum, value) => sum + value, 0) / recentValues.length;
+      appendChartPoint(seriesKey, timestamp, averageValue, SERIES_DEFAULTS[seriesKey] || {});
+    });
+  });
 }
 
 function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
@@ -253,6 +325,20 @@ function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
         );
       }
     });
+}
+
+function appendTeslaAggregateFallbackPoint(vehicles, data, timestamp) {
+  const teslaVehicles = (vehicles || []).filter((vehicle) => vehicle.source === "Tesla Vehicle");
+  if (teslaVehicles.length) {
+    const totalChargeKw = teslaVehicles.reduce((sum, vehicle) => sum + (Number(vehicle.charge_power_kw) || 0), 0);
+    appendChartPoint("tesla_ev_charge_kw", timestamp, totalChargeKw, SERIES_DEFAULTS.tesla_ev_charge_kw);
+    return;
+  }
+
+  const teslaSource = (data.sources || []).find((source) => source.name === "Tesla Charging");
+  if (!teslaSource || teslaSource.status === "disconnected") {
+    appendChartPoint("tesla_ev_charge_kw", timestamp, 0, SERIES_DEFAULTS.tesla_ev_charge_kw);
+  }
 }
 
 function getVehicleStatusMeta(vehicle) {
@@ -674,6 +760,7 @@ function mergeEnergySeries(seriesList) {
     existing.points = new Map(trimSeriesPoints(existing.points));
     chartStore.set(series.key, existing);
   });
+  saveChartHistoryCache();
 }
 
 function getChartWindow(seriesList, hours) {
@@ -705,32 +792,19 @@ function formatXAxisLabel(timestamp, hours) {
   return new Date(Number(timestamp)).toLocaleString([], options);
 }
 
-function downsamplePoints(points, maxPoints = MAX_RENDERED_POINTS) {
-  if (points.length <= maxPoints) return points;
-  if (maxPoints <= 2) return [points[0], points[points.length - 1]];
-  const result = [points[0]];
-  const stride = (points.length - 2) / (maxPoints - 2);
-  for (let index = 1; index < maxPoints - 1; index += 1) {
-    const sourceIndex = Math.min(points.length - 2, Math.round(index * stride));
-    result.push(points[sourceIndex]);
-  }
-  result.push(points[points.length - 1]);
-  return result;
-}
-
 function buildChartState(filterFn, activeKey, hours) {
   const filteredSeries = Array.from(chartStore.values()).filter((series) => filterFn(series));
   const { windowStart, windowEnd } = getChartWindow(filteredSeries, hours);
 
   const datasets = filteredSeries.map((series) => {
     const highlighted = !activeKey || activeKey === series.key;
-    const data = downsamplePoints(Array.from(series.points.entries())
+    const data = Array.from(series.points.entries())
       .map(([timestamp, point]) => ({
         x: new Date(timestamp).getTime(),
         y: point?.value ?? null,
         state: point?.state || null,
       }))
-      .filter((point) => point.x >= windowStart && point.x <= windowEnd));
+      .filter((point) => point.x >= windowStart && point.x <= windowEnd);
     return {
       label: series.label,
       key: series.key,
@@ -988,6 +1062,7 @@ function renderDashboard(data) {
   const timestamp = data.updated_at || new Date().toISOString();
   appendDisconnectedSourcePoints(data, timestamp);
   appendTeslaVehicleFallbackPoints(displayVehicles, timestamp);
+  appendTeslaAggregateFallbackPoint(displayVehicles, data, timestamp);
   renderPowerFlow(data.power_flow || {});
   syncChartWindowControls("energy");
   syncChartWindowControls("vehicle");
@@ -1083,6 +1158,7 @@ async function refreshDashboard() {
 }
 
 setupHeaderMenu();
+loadChartHistoryCache();
 loadTeslaVehicleCache();
 try {
   renderDashboard(initialData);
