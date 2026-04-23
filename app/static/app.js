@@ -36,6 +36,16 @@ const SOURCE_ZERO_SERIES = {
 const SOURCE_AVERAGED_SERIES = {
   Growatt: ["growatt_soc_pct"],
 };
+const SOURCE_CONNECTED_SERIES = {
+  Growatt: [
+    "growatt_load_kw",
+    "grid_import_kw",
+    "growatt_soc_pct",
+    "growatt_battery_charge_kw",
+    "growatt_battery_discharge_kw",
+  ],
+  GoodWe: ["solar_input_kw"],
+};
 
 function formatValue(value, unit = "") {
   if (value === null || value === undefined || value === "") return "N/A";
@@ -221,6 +231,40 @@ function appendChartPoint(key, timestamp, value, defaults = {}) {
   saveChartHistoryCache();
 }
 
+function appendChartPointWithCarryForward(key, timestamp, value, defaults = {}) {
+  const normalizedTimestamp = normalizeChartTimestamp(timestamp);
+  if (!normalizedTimestamp) return;
+  const normalizedMs = new Date(normalizedTimestamp).getTime();
+  if (!Number.isFinite(normalizedMs)) return;
+
+  const series = ensureChartSeries(key, defaults);
+  series.label = defaults.label || series.label;
+  series.unit = defaults.unit || series.unit;
+  series.color = defaults.color || series.color;
+  series.axis = defaults.axis || series.axis;
+
+  const sortedPoints = trimSeriesPoints(series.points);
+  const lastEntry = sortedPoints.length ? sortedPoints[sortedPoints.length - 1] : null;
+  const lastTimestampMs = lastEntry ? new Date(lastEntry[0]).getTime() : null;
+  const lastValue = lastEntry?.[1]?.value;
+  const carryForwardValue = Number.isFinite(lastValue) ? lastValue : value;
+
+  if (Number.isFinite(lastTimestampMs) && lastTimestampMs < normalizedMs) {
+    for (
+      let bucketMs = lastTimestampMs + CHART_POINT_INTERVAL_MS;
+      bucketMs < normalizedMs;
+      bucketMs += CHART_POINT_INTERVAL_MS
+    ) {
+      series.points.set(new Date(bucketMs).toISOString(), { value: carryForwardValue, state: null });
+    }
+  }
+
+  series.points.set(normalizedTimestamp, { value, state: null });
+  series.points = new Map(trimSeriesPoints(series.points));
+  chartStore.set(key, series);
+  saveChartHistoryCache();
+}
+
 function hydrateTeslaVehicles(vehicles) {
   const liveVehicles = Array.isArray(vehicles) ? vehicles : [];
   const mergedVehicles = liveVehicles.map((vehicle) => {
@@ -301,6 +345,22 @@ function appendDisconnectedSourcePoints(data, timestamp) {
   });
 }
 
+function appendConnectedSourceContinuityPoints(data, timestamp) {
+  const sourceStatuses = new Map((data.sources || []).map((source) => [source.name, source.status]));
+  Object.entries(SOURCE_CONNECTED_SERIES).forEach(([sourceName, seriesKeys]) => {
+    const status = sourceStatuses.get(sourceName);
+    if (status && status !== "connected" && status !== "degraded") return;
+    seriesKeys.forEach((seriesKey) => {
+      const series = chartStore.get(seriesKey);
+      if (!series) return;
+      const latestEntry = trimSeriesPoints(series.points).slice(-1)[0];
+      const latestValue = latestEntry?.[1]?.value;
+      if (!Number.isFinite(latestValue)) return;
+      appendChartPointWithCarryForward(seriesKey, timestamp, latestValue, SERIES_DEFAULTS[seriesKey] || {});
+    });
+  });
+}
+
 function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
   (vehicles || [])
     .filter((vehicle) => vehicle.source === "Tesla Vehicle")
@@ -309,7 +369,7 @@ function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
       const socKey = `vehicle_${String(vehicleKey).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}_soc_pct`;
       const chargeKey = `vehicle_${String(vehicleKey).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}_charge_kw`;
       if (vehicle.battery_level !== null && vehicle.battery_level !== undefined) {
-        appendChartPoint(
+        appendChartPointWithCarryForward(
           socKey,
           timestamp,
           Number(vehicle.battery_level),
@@ -317,7 +377,7 @@ function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
         );
       }
       if (vehicle.charge_power_kw !== null && vehicle.charge_power_kw !== undefined) {
-        appendChartPoint(
+        appendChartPointWithCarryForward(
           chargeKey,
           timestamp,
           Number(vehicle.charge_power_kw),
@@ -331,13 +391,13 @@ function appendTeslaAggregateFallbackPoint(vehicles, data, timestamp) {
   const teslaVehicles = (vehicles || []).filter((vehicle) => vehicle.source === "Tesla Vehicle");
   if (teslaVehicles.length) {
     const totalChargeKw = teslaVehicles.reduce((sum, vehicle) => sum + (Number(vehicle.charge_power_kw) || 0), 0);
-    appendChartPoint("tesla_ev_charge_kw", timestamp, totalChargeKw, SERIES_DEFAULTS.tesla_ev_charge_kw);
+    appendChartPointWithCarryForward("tesla_ev_charge_kw", timestamp, totalChargeKw, SERIES_DEFAULTS.tesla_ev_charge_kw);
     return;
   }
 
   const teslaSource = (data.sources || []).find((source) => source.name === "Tesla Charging");
   if (!teslaSource || teslaSource.status === "disconnected") {
-    appendChartPoint("tesla_ev_charge_kw", timestamp, 0, SERIES_DEFAULTS.tesla_ev_charge_kw);
+    appendChartPointWithCarryForward("tesla_ev_charge_kw", timestamp, 0, SERIES_DEFAULTS.tesla_ev_charge_kw);
   }
 }
 
@@ -355,12 +415,43 @@ function getVehicleStatusMeta(vehicle) {
   return { className: "degraded", label: vehicle.charging_state || "Unknown" };
 }
 
+function formatInlineMetric(value, unit = "", digits = 1) {
+  if (!Number.isFinite(value)) return null;
+  return `${Number(value).toFixed(digits)}${unit}`;
+}
+
+function getChargeSpeedMarkup({ amps = null, kw = null, label = "Live", accent = "accent" } = {}) {
+  const parts = [];
+  if (Number.isFinite(amps) && Number(amps) > 0) {
+    parts.push(formatInlineMetric(Number(amps), "A", Number(amps) < 10 ? 1 : 0));
+  }
+  if (Number.isFinite(kw) && Number(kw) > 0) {
+    parts.push(formatInlineMetric(Number(kw), "kW", Number(kw) < 10 ? 1 : 0));
+  }
+  if (!parts.length) return "";
+  return `<span class="status-metric status-metric-${accent}" title="${label}">${parts.join(" · ")}</span>`;
+}
+
 function getBatteryFillStyle(level) {
   const value = Math.max(0, Math.min(100, Number(level || 0)));
   return `width:${value}%;background:linear-gradient(90deg,#ff5a5f 0%,#f5d547 58%,#46d37b 100%);`;
 }
 
-function renderBatteryRail(vehicles, batteries) {
+function getTrackerFillStyle(value, maxValue, color) {
+  const safeMax = Math.max(1, Number(maxValue) || 1);
+  const width = Math.max(0, Math.min(100, (Math.max(0, Number(value) || 0) / safeMax) * 100));
+  return `width:${width}%;background:${color};`;
+}
+
+function getLatestSeriesValue(seriesKey) {
+  const series = chartStore.get(seriesKey);
+  if (!series) return 0;
+  const latestEntry = trimSeriesPoints(series.points).slice(-1)[0];
+  const latestValue = latestEntry?.[1]?.value;
+  return Number.isFinite(latestValue) ? Number(latestValue) : 0;
+}
+
+function renderBatteryRail(vehicles, batteries, powerFlow) {
   const root = document.getElementById("battery-rail");
   if (!root) return;
   const items = [
@@ -412,6 +503,58 @@ function renderBatteryRail(vehicles, batteries) {
       `,
     )
     .join("");
+
+  const trackerItems = [
+    {
+      name: "Solar input",
+      value: Math.max(0, Number(powerFlow?.solar_kw) || 0),
+      color: "#f7c66b",
+    },
+    {
+      name: "Load consumption",
+      value: Math.max(0, Number(powerFlow?.home_kw) || 0),
+      color: "#61e6ff",
+    },
+    {
+      name: "Grid import",
+      value: Math.max(0, Number(powerFlow?.grid_kw) || 0),
+      color: "#ff8d7d",
+    },
+    {
+      name: "Growatt charge",
+      value: Math.max(0, getLatestSeriesValue("growatt_battery_charge_kw")),
+      color: "#4cc9f0",
+    },
+    {
+      name: "Growatt discharge",
+      value: Math.max(0, getLatestSeriesValue("growatt_battery_discharge_kw")),
+      color: "#ff9cf0",
+    },
+  ];
+  const trackerMax = Math.max(1, ...trackerItems.map((item) => item.value));
+
+  root.innerHTML = `
+    <div class="battery-bar-row">
+      ${barMarkup}
+    </div>
+    <div class="system-tracker-row">
+      ${trackerItems
+        .map(
+          (item) => `
+            <article class="system-tracker-card">
+              <div class="system-tracker-copy">
+                <strong>${item.name}</strong>
+                <span>${formatValue(item.value, "kW")}</span>
+              </div>
+              <div class="system-tracker-track">
+                <div class="system-tracker-fill" style="${getTrackerFillStyle(item.value, trackerMax, item.color)}"></div>
+              </div>
+            </article>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function renderChargers(chargers) {
@@ -488,12 +631,21 @@ function renderPlants(plants) {
 function renderVehicles(vehicles) {
   const root = document.getElementById("vehicles");
   root.innerHTML = vehicles
-    .map(
-      (vehicle) => `
+    .map((vehicle) => {
+      const chargeMetric = getChargeSpeedMarkup({
+        amps: Number(vehicle.charge_current_a),
+        kw: Number(vehicle.charge_power_kw),
+        label: `${vehicle.name} charge speed`,
+        accent: "accent",
+      });
+      return `
         <article class="entity-card">
           <div class="entity-meta">
-            <span>${vehicle.name}</span>
-            <span class="pill">${vehicle.stale ? `${vehicle.source} • Last known` : vehicle.source}</span>
+            <span class="entity-meta-title">${vehicle.name}</span>
+            <div class="entity-meta-badges">
+              ${chargeMetric}
+              <span class="pill">${vehicle.stale ? `${vehicle.source} • Last known` : vehicle.source}</span>
+            </div>
           </div>
           <div class="entity-main">
             <strong>${formatValue(vehicle.battery_level, "%")}</strong>
@@ -506,35 +658,63 @@ function renderVehicles(vehicles) {
             <span>Location: ${vehicle.location || "Unknown"}</span>
           </div>
         </article>
-      `,
-    )
+      `;
+    })
     .join("");
 }
 
-function renderSources(sources, vehicles) {
+function renderSources(sources, vehicles, chargers, powerFlow) {
   const root = document.getElementById("provider-strip");
   if (!root) return;
   const providerLabelMap = {
     "GoodWe": "Solar",
     "Tesla Charging": "Tesla Wall",
   };
+  const wallCharger = (chargers || []).find((charger) => charger.source === "Tesla Charging");
+  const totalVehicleAmps = (vehicles || [])
+    .filter((vehicle) => vehicle.source === "Tesla Vehicle")
+    .reduce((sum, vehicle) => sum + (Number(vehicle.charge_current_a) || 0), 0);
+
   const providerMarkup = sources
-    .map(
-      (source) => `
+    .map((source) => {
+      let metric = "";
+      if (source.name === "Tesla Charging") {
+        metric = getChargeSpeedMarkup({
+          amps: totalVehicleAmps,
+          kw: Number(wallCharger?.power_kw),
+          label: "Tesla Wall live speed",
+          accent: "accent",
+        });
+      } else if (source.name === "GoodWe") {
+        metric = getChargeSpeedMarkup({
+          kw: Number(powerFlow?.solar_kw),
+          label: "Solar input",
+          accent: "good",
+        });
+      }
+      return `
         <div class="provider-pill ${source.status}">
           <span>${providerLabelMap[source.name] || source.name}</span>
+          ${metric}
         </div>
-      `,
-    )
+      `;
+    })
     .join("");
 
   const vehicleMarkup = (vehicles || [])
     .filter((vehicle) => vehicle.source === "Tesla Vehicle")
     .map((vehicle) => {
       const status = getVehicleStatusMeta(vehicle);
+      const metric = getChargeSpeedMarkup({
+        amps: Number(vehicle.charge_current_a),
+        kw: Number(vehicle.charge_power_kw),
+        label: `${vehicle.name} live speed`,
+        accent: "accent",
+      });
       return `
         <div class="provider-pill vehicle-pill ${status.className}">
           <span>${vehicle.name}</span>
+          ${metric}
         </div>
       `;
     })
@@ -1060,6 +1240,7 @@ function renderDashboard(data) {
   mergeEnergySeries(data.energy_chart || []);
   const displayVehicles = hydrateTeslaVehicles(data.vehicles || []);
   const timestamp = data.updated_at || new Date().toISOString();
+  appendConnectedSourceContinuityPoints(data, timestamp);
   appendDisconnectedSourcePoints(data, timestamp);
   appendTeslaVehicleFallbackPoints(displayVehicles, timestamp);
   appendTeslaAggregateFallbackPoint(displayVehicles, data, timestamp);
@@ -1073,8 +1254,8 @@ function renderDashboard(data) {
   renderBatteries(data.batteries || []);
   renderPlants(data.plants || []);
   renderVehicles(displayVehicles);
-  renderBatteryRail(displayVehicles, data.batteries || []);
-  renderSources(data.sources || [], displayVehicles);
+  renderBatteryRail(displayVehicles, data.batteries || [], data.power_flow || {});
+  renderSources(data.sources || [], displayVehicles, data.chargers || [], data.power_flow || {});
   renderUpdatedAt(data.updated_at);
 }
 

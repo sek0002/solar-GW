@@ -644,6 +644,11 @@ h3 {
   margin-top: 6px;
 }
 
+.battery-bar-row,
+.system-tracker-row {
+  display: contents;
+}
+
 .battery-bar-card {
   padding: 0;
   min-width: 0;
@@ -691,6 +696,55 @@ h3 {
   text-overflow: ellipsis;
 }
 
+.system-tracker-card {
+  padding: 10px 12px;
+  min-width: 0;
+  border: 1px solid rgba(139, 179, 180, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.system-tracker-copy {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.system-tracker-copy strong {
+  min-width: 0;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: rgba(237, 245, 238, 0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.system-tracker-copy span {
+  flex: 0 0 auto;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.system-tracker-track {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.system-tracker-fill {
+  min-width: 4px;
+  height: 100%;
+  border-radius: inherit;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.16);
+}
+
 .provider-strip-icons {
   gap: 10px;
   flex-wrap: wrap;
@@ -707,6 +761,38 @@ h3 {
   background: rgba(255, 255, 255, 0.04);
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.status-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(233, 244, 245, 0.9);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.status-metric::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.status-metric-accent {
+  color: var(--accent);
+}
+
+.status-metric-good {
+  color: var(--good);
 }
 
 .vehicle-pill {
@@ -780,6 +866,18 @@ h3 {
 
 .entity-meta {
   margin-bottom: 12px;
+}
+
+.entity-meta-title {
+  min-width: 0;
+}
+
+.entity-meta-badges {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .vehicle-title,
