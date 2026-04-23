@@ -813,6 +813,10 @@ h3 {
   opacity: 0.9;
 }
 
+.status-metric-plain::before {
+  display: none;
+}
+
 .status-metric-accent {
   color: var(--accent);
 }

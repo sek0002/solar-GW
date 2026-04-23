@@ -417,7 +417,7 @@ function formatInlineMetric(value, unit = "", digits = 1) {
   return `${Number(value).toFixed(digits)}${unit}`;
 }
 
-function getChargeSpeedMarkup({ amps = null, kw = null, label = "Live", accent = "accent" } = {}) {
+function getChargeSpeedMarkup({ amps = null, kw = null, label = "Live", accent = "accent", plain = false } = {}) {
   const parts = [];
   if (Number.isFinite(amps) && Number(amps) > 0) {
     parts.push(formatInlineMetric(Number(amps), "A", Number(amps) < 10 ? 1 : 0));
@@ -426,7 +426,7 @@ function getChargeSpeedMarkup({ amps = null, kw = null, label = "Live", accent =
     parts.push(formatInlineMetric(Number(kw), "kW", Number(kw) < 10 ? 1 : 0));
   }
   if (!parts.length) return "";
-  return `<span class="status-metric status-metric-${accent}" title="${label}">${parts.join(" · ")}</span>`;
+  return `<span class="status-metric status-metric-${accent}${plain ? " status-metric-plain" : ""}" title="${label}">${parts.join(" · ")}</span>`;
 }
 
 function getBatteryFillStyle(level) {
@@ -690,13 +690,13 @@ function renderSources(sources, vehicles, chargers, powerFlow) {
           kw: Number(wallCharger?.power_kw),
           label: "Tesla Wall live speed",
           accent: "accent",
+          plain: true,
         });
       } else if (source.name === "GoodWe") {
-        metric = getChargeSpeedMarkup({
-          kw: getLatestSeriesValue("solar_input_kw"),
-          label: "Solar input",
-          accent: "good",
-        });
+        const solarKw = getLatestSeriesValue("solar_input_kw");
+        metric = Number.isFinite(solarKw) && solarKw > 0
+          ? `<span class="status-metric status-metric-good status-metric-plain" title="Solar input">${formatInlineMetric(solarKw, "kW", solarKw < 10 ? 1 : 0)}</span>`
+          : "";
       }
       return `
         <div class="provider-pill ${source.status}">
@@ -716,6 +716,7 @@ function renderSources(sources, vehicles, chargers, powerFlow) {
         kw: Number(vehicle.charge_power_kw),
         label: `${vehicle.name} live speed`,
         accent: "accent",
+        plain: true,
       });
       return `
         <div class="provider-pill vehicle-pill ${status.className}">
