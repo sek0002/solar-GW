@@ -440,6 +440,15 @@ function getTrackerFillStyle(value, maxValue, color) {
   return `width:${width}%;background:${color};`;
 }
 
+function getSignedTrackerFillStyle(value, maxAbsValue) {
+  const safeMax = Math.max(1, Number(maxAbsValue) || 1);
+  const numericValue = Number(value) || 0;
+  const width = Math.max(0, Math.min(50, (Math.abs(numericValue) / safeMax) * 50));
+  const color = numericValue >= 0 ? "#4cc9f0" : "#ff9cf0";
+  const anchor = numericValue >= 0 ? "left: 50%;" : `left: calc(50% - ${width}%);`;
+  return `width:${width}%;${anchor}background:${color};`;
+}
+
 function getLatestSeriesValue(seriesKey) {
   const series = chartStore.get(seriesKey);
   if (!series) return 0;
@@ -517,18 +526,18 @@ function renderBatteryRail(vehicles, batteries, powerFlow) {
       value: Math.max(0, Number(powerFlow?.grid_kw) || 0),
       color: "#ff8d7d",
     },
-    {
-      name: "Growatt charge",
-      value: Math.max(0, getLatestSeriesValue("growatt_battery_charge_kw")),
-      color: "#4cc9f0",
-    },
-    {
-      name: "Growatt discharge",
-      value: Math.max(0, getLatestSeriesValue("growatt_battery_discharge_kw")),
-      color: "#ff9cf0",
-    },
   ];
+  const growattChargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_charge_kw"));
+  const growattDischargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_discharge_kw"));
+  const growattBatteryKw = growattChargeKw > 0 ? growattChargeKw : growattDischargeKw > 0 ? -growattDischargeKw : 0;
+  trackerItems.push({
+    name: "Growatt battery",
+    value: growattBatteryKw,
+    color: growattBatteryKw >= 0 ? "#4cc9f0" : "#ff9cf0",
+    signed: true,
+  });
   const trackerMax = Math.max(1, ...trackerItems.map((item) => item.value));
+  const signedTrackerMax = Math.max(1, ...trackerItems.map((item) => Math.abs(item.value)));
 
   root.innerHTML = `
     <div class="battery-bar-row">
@@ -541,10 +550,10 @@ function renderBatteryRail(vehicles, batteries, powerFlow) {
             <article class="system-tracker-card">
               <div class="system-tracker-copy">
                 <strong>${item.name}</strong>
-                <span>${formatValue(item.value, "kW")}</span>
+                <span>${item.signed ? formatValue(item.value, "kW") : formatValue(item.value, "kW")}</span>
               </div>
-              <div class="system-tracker-track">
-                <div class="system-tracker-fill" style="${getTrackerFillStyle(item.value, trackerMax, item.color)}"></div>
+              <div class="system-tracker-track ${item.signed ? "system-tracker-track-signed" : ""}">
+                <div class="system-tracker-fill" style="${item.signed ? getSignedTrackerFillStyle(item.value, signedTrackerMax) : getTrackerFillStyle(item.value, trackerMax, item.color)}"></div>
               </div>
             </article>
           `,
@@ -684,7 +693,7 @@ function renderSources(sources, vehicles, chargers, powerFlow) {
         });
       } else if (source.name === "GoodWe") {
         metric = getChargeSpeedMarkup({
-          kw: Number(powerFlow?.solar_kw),
+          kw: getLatestSeriesValue("solar_input_kw"),
           label: "Solar input",
           accent: "good",
         });

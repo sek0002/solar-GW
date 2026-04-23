@@ -57,7 +57,7 @@
         <div class="provider-strip-icons" id="provider-strip"></div>
       </div>
       <section class="control-strip">
-        <article class="control-tile">
+        <article class="control-tile control-tile-combined">
           <div class="control-tile-head">
             <button class="icon-button" id="automation-toggle" type="button" aria-expanded="false">Auto</button>
             <label class="switch">
@@ -67,23 +67,24 @@
           </div>
           <strong id="automation-icon-title">Automation paused</strong>
           <p id="automation-icon-detail">Combined automation toggle is off.</p>
-        </article>
-        <article class="control-tile">
-          <div class="control-tile-head">
-            <button class="icon-button" id="charge-toggle" type="button" aria-expanded="false">Charge</button>
-            <label class="switch">
-              <input id="manual-charge-enabled" type="checkbox" />
-              <span class="slider"></span>
-            </label>
-          </div>
-          <strong id="manual-charge-title">Manual charge off</strong>
-          <p id="manual-charge-detail">Set combined amps between 5A and 30A.</p>
-          <div class="manual-charge-inline">
-            <div class="manual-charge-readout manual-charge-readout-compact">
-              <strong id="manual-charge-amps">10A</strong>
-              <span id="manual-charge-kw">2.30 kW</span>
+          <div class="control-subsection">
+            <div class="control-subsection-head">
+              <div>
+                <strong id="manual-charge-title">Manual charge off</strong>
+                <p id="manual-charge-detail">Set combined amps between 5A and 30A.</p>
+              </div>
+              <label class="switch">
+                <input id="manual-charge-enabled" type="checkbox" />
+                <span class="slider"></span>
+              </label>
             </div>
-            <input id="manual-charge-slider" type="range" min="5" max="30" step="1" value="10" />
+            <div class="manual-charge-inline">
+              <div class="manual-charge-readout manual-charge-readout-compact">
+                <strong id="manual-charge-amps">10A</strong>
+                <span id="manual-charge-kw">2.30 kW</span>
+              </div>
+              <input id="manual-charge-slider" type="range" min="5" max="30" step="1" value="10" />
+            </div>
           </div>
         </article>
         <article class="control-tile battery-tile">
