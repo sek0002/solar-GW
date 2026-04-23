@@ -178,6 +178,18 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
     rule_3_enabled = state.rules["battery_floor_pause"].enabled
     rule_4_enabled = state.rules["night_trickle"].enabled
 
+    manual = ManualChargeControl(
+        enabled=state.manual_charge.enabled,
+        target_amps=clamp_amps(state.manual_charge.target_amps),
+        target_kw=amps_to_kw(clamp_amps(state.manual_charge.target_amps)),
+        status=state.manual_charge.status,
+        detail=state.manual_charge.detail,
+        notes=list(state.manual_charge.notes),
+        updated_at=datetime.fromisoformat(state.manual_charge.updated_at)
+        if state.manual_charge.updated_at
+        else None,
+    )
+
     midday_active = rule_1_enabled and 12 <= now.hour < 14
     solar_match_active = (
         rule_2_enabled
@@ -186,7 +198,8 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
     )
     battery_floor_active = rule_3_enabled and battery_soc is not None and battery_soc < 40
     night_trickle_active = rule_4_enabled and 0 <= now.hour < 6 and (battery_soc or 0.0) > 50
-    plug_in_hold_active = rule_0_enabled and tesla_vehicle_connected and not any([midday_active, solar_match_active, battery_floor_active, night_trickle_active])
+    other_rule_active = any([midday_active, solar_match_active, battery_floor_active, night_trickle_active, manual.enabled])
+    plug_in_hold_active = rule_0_enabled and tesla_vehicle_connected and not other_rule_active
 
     if not state.global_enabled:
         plug_in_hold_active = False
@@ -259,18 +272,6 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
             target_kw=1.5,
         ),
     ]
-
-    manual = ManualChargeControl(
-        enabled=state.manual_charge.enabled,
-        target_amps=clamp_amps(state.manual_charge.target_amps),
-        target_kw=amps_to_kw(clamp_amps(state.manual_charge.target_amps)),
-        status=state.manual_charge.status,
-        detail=state.manual_charge.detail,
-        notes=list(state.manual_charge.notes),
-        updated_at=datetime.fromisoformat(state.manual_charge.updated_at)
-        if state.manual_charge.updated_at
-        else None,
-    )
 
     effective_mode = "Idle"
     effective_detail = "Automation waiting for an active rule."
