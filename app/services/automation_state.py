@@ -255,7 +255,11 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
             description="Pause all Tesla charging whenever the Growatt battery drops below 40%.",
             enabled=rule_3_enabled,
             active=battery_floor_active,
-            detail="Battery is below 40%, so charging should pause." if battery_floor_active else "Standing by until the battery falls below 40%.",
+            detail=(
+                "Battery is below 40%, so Tesla charging should stay off and any plugged-in vehicle should be paused."
+                if battery_floor_active
+                else "Standing by until the battery falls below 40%."
+            ),
         ),
         AutomationRule(
             id="night_trickle",
