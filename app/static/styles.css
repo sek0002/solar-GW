@@ -364,6 +364,13 @@ h3 {
   flex-wrap: nowrap;
 }
 
+.control-tile-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .icon-button {
   min-width: 52px;
   min-height: 32px;
@@ -376,6 +383,17 @@ h3 {
   font-size: 0.82rem;
   cursor: pointer;
   flex: 0 0 auto;
+}
+
+.icon-button-stop {
+  border-color: rgba(255, 144, 122, 0.28);
+  background: rgba(255, 144, 122, 0.08);
+  color: #ffd3cb;
+}
+
+.icon-button-stop:hover {
+  border-color: rgba(255, 144, 122, 0.42);
+  background: rgba(255, 144, 122, 0.14);
 }
 
 .control-tile strong {

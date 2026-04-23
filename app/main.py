@@ -24,13 +24,17 @@ from app.services.auth import (
     verify_session_token,
 )
 from app.services.dashboard import build_dashboard_data
-from app.services.tesla_commands import apply_automation_panel
+from app.services.tesla_commands import apply_automation_panel, apply_manual_charge_request, enforce_charge_stop_for_panel
 from app.services.tesla_partner import build_partner_status, register_partner_domain
 from app.services.tesla_keys import WELL_KNOWN_TESLA_PUBLIC_KEY_PATH, ensure_tesla_keypair, get_public_key_path
 from app.services.automation_state import (
     GlobalAutomationPayload,
     ManualChargePayload,
     RuleTogglePayload,
+    mark_charge_stop_checked,
+    mark_automation_applied,
+    should_apply_automation,
+    should_retry_charge_stop,
     update_global_automation,
     update_manual_charge,
     update_manual_charge_result,
@@ -155,6 +159,35 @@ def _clear_auth_cookie(response: RedirectResponse, settings: Settings) -> None:
     response.delete_cookie(settings.app_auth_cookie_name, httponly=True, samesite="lax")
 
 
+async def _maybe_apply_automation(settings: Settings, panel) -> dict | None:
+    if panel.stop_charging_required or panel.effective_target_amps is None:
+        if should_apply_automation(panel):
+            mark_automation_applied(panel)
+        return None
+    if not should_apply_automation(panel):
+        return None
+    command_result = await apply_automation_panel(settings, panel)
+    invalidate_tesla_snapshot_cache()
+    update_manual_charge_result(command_result)
+    mark_automation_applied(panel)
+    return command_result
+
+
+async def _maybe_enforce_charge_stop(settings: Settings, data) -> dict | None:
+    panel = data.automation_panel
+    tesla_charging_active = any(
+        vehicle.source == "Tesla Vehicle" and str(vehicle.charging_state or "").lower() == "charging"
+        for vehicle in data.vehicles
+    )
+    if not should_retry_charge_stop(panel, tesla_charging_active):
+        return None
+    command_result = await enforce_charge_stop_for_panel(settings, panel)
+    invalidate_tesla_snapshot_cache()
+    update_manual_charge_result(command_result)
+    mark_charge_stop_checked(panel)
+    return command_result
+
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, settings: Settings = Depends(get_settings)) -> HTMLResponse:
     if verify_session_token(settings, request.cookies.get(settings.app_auth_cookie_name)):
@@ -221,6 +254,8 @@ async def logout(settings: Settings = Depends(get_settings)):
 async def dashboard_page(request: Request, settings: Settings = Depends(get_settings)) -> HTMLResponse:
     require_authenticated_request(request, settings)
     data = await build_dashboard_data(settings)
+    await _maybe_apply_automation(settings, data.automation_panel)
+    await _maybe_enforce_charge_stop(settings, data)
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -242,6 +277,8 @@ async def dashboard_page(request: Request, settings: Settings = Depends(get_sett
 async def dashboard_api(request: Request, settings: Settings = Depends(get_settings)):
     require_authenticated_request(request, settings)
     data = await build_dashboard_data(settings)
+    await _maybe_apply_automation(settings, data.automation_panel)
+    await _maybe_enforce_charge_stop(settings, data)
     return data.model_dump(mode="json")
 
 
@@ -250,9 +287,9 @@ async def automation_rule_toggle(request: Request, payload: RuleTogglePayload, s
     require_authenticated_request(request, settings)
     update_rule(payload.rule_id, payload.enabled)
     data = await build_dashboard_data(settings)
-    command_result = await apply_automation_panel(settings, data.automation_panel)
-    invalidate_tesla_snapshot_cache()
-    update_manual_charge_result(command_result)
+    command_result = await _maybe_apply_automation(settings, data.automation_panel)
+    if command_result is None:
+        command_result = await _maybe_enforce_charge_stop(settings, data)
     return {"ok": True, "tesla": command_result}
 
 
@@ -261,9 +298,9 @@ async def automation_global_toggle(request: Request, payload: GlobalAutomationPa
     require_authenticated_request(request, settings)
     update_global_automation(payload.enabled)
     data = await build_dashboard_data(settings)
-    command_result = await apply_automation_panel(settings, data.automation_panel)
-    invalidate_tesla_snapshot_cache()
-    update_manual_charge_result(command_result)
+    command_result = await _maybe_apply_automation(settings, data.automation_panel)
+    if command_result is None:
+        command_result = await _maybe_enforce_charge_stop(settings, data)
     return {"ok": True, "tesla": command_result}
 
 
@@ -271,10 +308,11 @@ async def automation_global_toggle(request: Request, payload: GlobalAutomationPa
 async def automation_manual_charge(request: Request, payload: ManualChargePayload, settings: Settings = Depends(get_settings)):
     require_authenticated_request(request, settings)
     update_manual_charge(payload.enabled, payload.target_amps)
-    data = await build_dashboard_data(settings)
-    command_result = await apply_automation_panel(settings, data.automation_panel)
+    command_result = await apply_manual_charge_request(settings, payload.enabled, payload.target_amps)
     invalidate_tesla_snapshot_cache()
     update_manual_charge_result(command_result)
+    data = await build_dashboard_data(settings)
+    mark_automation_applied(data.automation_panel)
     return {"ok": True, "tesla": command_result}
 
 

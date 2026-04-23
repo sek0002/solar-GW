@@ -318,13 +318,22 @@ async def apply_manual_charge_request(settings: Settings, enabled: bool, target_
     )
 
 
+async def enforce_charge_stop_for_panel(settings: Settings, panel: AutomationPanel) -> dict[str, Any]:
+    return await _apply_charge_target(
+        settings,
+        None,
+        f"{panel.effective_mode} requested charging pause for connected Tesla vehicles.",
+    )
+
+
 async def apply_automation_panel(settings: Settings, panel: AutomationPanel) -> dict[str, Any]:
     if panel.effective_target_amps is None:
-        return await _apply_charge_target(
-            settings,
-            None,
-            f"{panel.effective_mode} requested charging pause for connected Tesla vehicles.",
-        )
+        return {
+            "applied": False,
+            "status": "idle",
+            "target_amps": None,
+            "detail": f"{panel.effective_mode} does not currently require a Tesla charge target.",
+        }
 
     requested_amps = clamp_amps(panel.effective_target_amps)
     return await _apply_charge_target(

@@ -42,6 +42,9 @@ class PersistedAutomationState(BaseModel):
         }
     )
     manual_charge: PersistedManualCharge = Field(default_factory=PersistedManualCharge)
+    last_applied_signature: str | None = None
+    last_stop_check_signature: str | None = None
+    last_stop_check_at: str | None = None
 
 
 class RuleTogglePayload(BaseModel):
@@ -128,6 +131,66 @@ def update_manual_charge_result(result: dict[str, Any]) -> PersistedAutomationSt
     state.manual_charge.detail = result.get("detail")
     state.manual_charge.notes = [str(note) for note in result.get("notes", []) if note]
     state.manual_charge.updated_at = datetime.now(LOCAL_TZ).isoformat()
+    save_persisted_state(state)
+    return state
+
+
+def automation_signature(panel: AutomationPanel) -> str:
+    return json.dumps(
+        {
+            "global_enabled": panel.global_enabled,
+            "manual_enabled": panel.manual_charge.enabled,
+            "tesla_vehicle_connected": panel.tesla_vehicle_connected,
+            "effective_mode": panel.effective_mode,
+            "effective_target_amps": panel.effective_target_amps,
+        },
+        sort_keys=True,
+    )
+
+
+def should_apply_automation(panel: AutomationPanel) -> bool:
+    state = load_persisted_state()
+    return state.last_applied_signature != automation_signature(panel)
+
+
+def mark_automation_applied(panel: AutomationPanel) -> PersistedAutomationState:
+    state = load_persisted_state()
+    state.last_applied_signature = automation_signature(panel)
+    save_persisted_state(state)
+    return state
+
+
+def stop_check_signature(panel: AutomationPanel) -> str:
+    return json.dumps(
+        {
+            "tesla_vehicle_connected": panel.tesla_vehicle_connected,
+            "stop_charging_required": panel.stop_charging_required,
+            "effective_mode": panel.effective_mode,
+        },
+        sort_keys=True,
+    )
+
+
+def should_retry_charge_stop(panel: AutomationPanel, charging_active: bool) -> bool:
+    if not panel.stop_charging_required or not panel.tesla_vehicle_connected or not charging_active:
+        return False
+    state = load_persisted_state()
+    signature = stop_check_signature(panel)
+    if state.last_stop_check_signature != signature:
+        return True
+    if not state.last_stop_check_at:
+        return True
+    try:
+        last_check = datetime.fromisoformat(state.last_stop_check_at)
+    except ValueError:
+        return True
+    return datetime.now(LOCAL_TZ) - last_check.astimezone(LOCAL_TZ) >= timedelta(minutes=5)
+
+
+def mark_charge_stop_checked(panel: AutomationPanel) -> PersistedAutomationState:
+    state = load_persisted_state()
+    state.last_stop_check_signature = stop_check_signature(panel)
+    state.last_stop_check_at = datetime.now(LOCAL_TZ).isoformat()
     save_persisted_state(state)
     return state
 
@@ -281,6 +344,8 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
     effective_detail = "Automation waiting for an active rule."
     effective_target_amps = None
     effective_target_kw = None
+    stop_charging_required = False
+    effective_rule_id: str | None = None
 
     if manual.enabled:
         effective_mode = "Manual charge"
@@ -291,31 +356,43 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
         effective_mode = "Automation paused"
         effective_detail = "Combined automation toggle is off."
     elif plug_in_hold_active:
+        effective_rule_id = "plug_in_hold"
         effective_mode = "Plug-in hold"
         effective_detail = "A connected Tesla will stay paused until another rule or manual charge enables charging."
+        stop_charging_required = True
     elif battery_floor_active:
+        effective_rule_id = "battery_floor_pause"
         effective_mode = "Pause charging"
         effective_detail = "Battery floor rule is pausing all Tesla charging."
+        stop_charging_required = True
     elif midday_active:
+        effective_rule_id = "off_peak_midday"
         effective_mode = "Off-peak charge"
         effective_detail = "Midday off-peak rule is requesting maximum combined charging."
         effective_target_amps = 30
         effective_target_kw = amps_to_kw(30)
     elif solar_match_active:
+        effective_rule_id = "solar_match"
         effective_mode = "Solar match"
         effective_detail = "Charging should track current GoodWe solar input with a 0.6kW buffer, enabled by the 10-minute average solar input."
         effective_target_amps = solar_match_amps
         effective_target_kw = amps_to_kw(solar_match_amps)
     elif night_trickle_active:
+        effective_rule_id = "night_trickle"
         effective_mode = "Night trickle"
         effective_detail = "Overnight trickle rule is active."
         effective_target_amps = night_trickle_amps
         effective_target_kw = 1.5
 
+    for rule in rules:
+        rule.active = rule.id == effective_rule_id
+
     return AutomationPanel(
         global_enabled=state.global_enabled,
         rules=rules,
         manual_charge=manual,
+        tesla_vehicle_connected=tesla_vehicle_connected,
+        stop_charging_required=stop_charging_required,
         effective_mode=effective_mode,
         effective_detail=effective_detail,
         effective_target_amps=effective_target_amps,

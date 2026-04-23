@@ -827,6 +827,18 @@ function updateManualChargeReadout(amps) {
   document.getElementById("manual-charge-kw").textContent = `${kw} kW`;
 }
 
+async function submitManualCharge(enabled, targetAmps) {
+  const response = await fetch("/api/automation/manual-charge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      enabled: Boolean(enabled),
+      target_amps: Number(targetAmps),
+    }),
+  });
+  return response.json().catch(() => null);
+}
+
 function renderAutomationPanel(panel) {
   const toggle = document.getElementById("automation-toggle");
   const chargeToggle = document.getElementById("charge-toggle");
@@ -875,6 +887,7 @@ function renderAutomationPanel(panel) {
 
   const manualEnabled = document.getElementById("manual-charge-enabled");
   const manualSlider = document.getElementById("manual-charge-slider");
+  const stopChargingButton = document.getElementById("stop-charging-button");
   const savedManualCharge = loadManualChargeState();
   const targetAmps = panel.manual_charge?.target_amps ?? savedManualCharge?.targetAmps ?? 10;
   const manualChargeEnabled = panel.manual_charge?.enabled ?? savedManualCharge?.enabled ?? false;
@@ -929,15 +942,7 @@ function renderAutomationPanel(panel) {
   manualEnabled.onchange = async () => {
     document.getElementById("manual-charge-title").textContent = manualEnabled.checked ? "Manual charge on" : "Manual charge off";
     saveManualChargeState(manualEnabled.checked, manualSlider.value);
-    const response = await fetch("/api/automation/manual-charge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        enabled: manualEnabled.checked,
-        target_amps: Number(manualSlider.value),
-      }),
-    });
-    const payload = await response.json().catch(() => null);
+    const payload = await submitManualCharge(manualEnabled.checked, manualSlider.value);
     if (payload?.tesla?.detail) {
       document.getElementById("manual-charge-detail").textContent = payload.tesla.detail;
     }
@@ -951,20 +956,34 @@ function renderAutomationPanel(panel) {
   };
   manualSlider.onchange = async () => {
     saveManualChargeState(manualEnabled.checked, manualSlider.value);
-    const response = await fetch("/api/automation/manual-charge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        enabled: manualEnabled.checked,
-        target_amps: Number(manualSlider.value),
-      }),
-    });
-    const payload = await response.json().catch(() => null);
+    const payload = await submitManualCharge(manualEnabled.checked, manualSlider.value);
     if (payload?.tesla?.detail) {
       document.getElementById("manual-charge-detail").textContent = payload.tesla.detail;
     }
     await refreshDashboard();
   };
+
+  if (stopChargingButton) {
+    stopChargingButton.onclick = async () => {
+      globalToggle.checked = false;
+      manualEnabled.checked = false;
+      saveManualChargeState(false, manualSlider.value);
+      document.getElementById("manual-charge-title").textContent = "Stopping charging";
+      document.getElementById("manual-charge-detail").textContent = "Pausing Tesla charging and disabling automation.";
+      await fetch("/api/automation/global", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: false,
+        }),
+      });
+      const payload = await submitManualCharge(false, manualSlider.value);
+      if (payload?.tesla?.detail) {
+        document.getElementById("manual-charge-detail").textContent = payload.tesla.detail;
+      }
+      await refreshDashboard();
+    };
+  }
 }
 
 function mergeEnergySeries(seriesList) {
