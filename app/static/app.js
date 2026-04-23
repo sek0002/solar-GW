@@ -513,7 +513,7 @@ function renderBatteryRail(vehicles, batteries, powerFlow) {
   const trackerItems = [
     {
       name: "Solar input",
-      value: Math.max(0, Number(powerFlow?.solar_kw) || 0),
+      value: Math.max(0, getLatestSeriesValue("solar_input_kw")),
       color: "#f7c66b",
     },
     {
