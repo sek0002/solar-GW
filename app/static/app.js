@@ -531,7 +531,7 @@ function renderBatteryRail(vehicles, batteries, powerFlow) {
   const growattDischargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_discharge_kw"));
   const growattBatteryKw = growattChargeKw > 0 ? growattChargeKw : growattDischargeKw > 0 ? -growattDischargeKw : 0;
   trackerItems.push({
-    name: "Growatt battery",
+    name: "Battery",
     value: growattBatteryKw,
     color: growattBatteryKw >= 0 ? "#4cc9f0" : "#ff9cf0",
     signed: true,
@@ -675,16 +675,24 @@ function renderSources(sources, vehicles, chargers, powerFlow) {
   const providerLabelMap = {
     "GoodWe": "Solar",
     "Tesla Charging": "Tesla Wall",
+    "Growatt Hybrid": "Battery",
   };
   const wallCharger = (chargers || []).find((charger) => charger.source === "Tesla Charging");
   const totalVehicleAmps = (vehicles || [])
     .filter((vehicle) => vehicle.source === "Tesla Vehicle")
     .reduce((sum, vehicle) => sum + (Number(vehicle.charge_current_a) || 0), 0);
+  const growattChargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_charge_kw"));
+  const growattDischargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_discharge_kw"));
+  const growattBatteryKw = growattChargeKw > 0 ? growattChargeKw : growattDischargeKw > 0 ? -growattDischargeKw : 0;
 
   const providerMarkup = sources
     .map((source) => {
       let metric = "";
-      if (source.name === "Tesla Charging") {
+      if (source.name === "Growatt Hybrid") {
+        metric = Number.isFinite(growattBatteryKw) && growattBatteryKw !== 0
+          ? `<span class="status-metric ${growattBatteryKw >= 0 ? "status-metric-accent" : "status-metric-warn"} status-metric-plain" title="Battery power">${formatInlineMetric(growattBatteryKw, "kW", Math.abs(growattBatteryKw) < 10 ? 1 : 0)}</span>`
+          : "";
+      } else if (source.name === "Tesla Charging") {
         metric = getChargeSpeedMarkup({
           amps: totalVehicleAmps,
           kw: Number(wallCharger?.power_kw),
@@ -938,7 +946,9 @@ function mergeEnergySeries(seriesList) {
 
     (series.points || []).forEach((point) => {
       if (!point?.timestamp) return;
-      existing.points.set(point.timestamp, {
+      const normalizedTimestamp = normalizeChartTimestamp(point.timestamp);
+      if (!normalizedTimestamp) return;
+      existing.points.set(normalizedTimestamp, {
         value: point.value ?? null,
         state: point.state || null,
       });

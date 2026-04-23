@@ -825,6 +825,10 @@ h3 {
   color: var(--good);
 }
 
+.status-metric-warn {
+  color: var(--warn);
+}
+
 .vehicle-pill {
   padding-right: 10px;
   background: rgba(255, 255, 255, 0.03);
