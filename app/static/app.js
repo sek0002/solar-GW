@@ -485,7 +485,7 @@ function renderBatteryRail(vehicles, batteries, powerFlow) {
       })),
   ];
 
-  root.innerHTML = items
+  const barMarkup = items
     .map(
       (item) => `
         <article class="battery-bar-card">
