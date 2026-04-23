@@ -15,6 +15,14 @@ const MANUAL_CHARGE_STORAGE_KEY = "solar-gw-manual-charge";
 const TESLA_VEHICLE_STORAGE_KEY = "solar-gw-tesla-vehicles";
 const CHART_HISTORY_STORAGE_KEY = "solar-gw-chart-history";
 const CHART_POINT_INTERVAL_MS = 2 * 60 * 1000;
+const TESLA_VEHICLE_COLORS = [
+  "#7db0ff",
+  "#5ee6a8",
+  "#ffb45e",
+  "#ff7aa8",
+  "#b79cff",
+  "#61e6ff",
+];
 const SERIES_DEFAULTS = {
   solar_input_kw: { label: "Solar input", unit: "kW", color: "#f7c66b", axis: "power" },
   growatt_load_kw: { label: "Load consumption", unit: "kW", color: "#61e6ff", axis: "power" },
@@ -112,6 +120,18 @@ function renderBatteries(batteries) {
 
 function getVehicleCacheKey(vehicle) {
   return vehicle.vin || vehicle.name;
+}
+
+function getTeslaVehicleSeriesColor(vehicleKey) {
+  const normalizedKey = String(vehicleKey || "tesla")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+  let hash = 0;
+  for (const char of normalizedKey) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+  return TESLA_VEHICLE_COLORS[hash % TESLA_VEHICLE_COLORS.length];
 }
 
 function loadTeslaVehicleCache() {
@@ -363,6 +383,7 @@ function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
     .filter((vehicle) => vehicle.source === "Tesla Vehicle")
     .forEach((vehicle) => {
       const vehicleKey = vehicle.name || vehicle.vin || "tesla";
+      const vehicleColor = getTeslaVehicleSeriesColor(vehicleKey);
       const socKey = `vehicle_${String(vehicleKey).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}_soc_pct`;
       const chargeKey = `vehicle_${String(vehicleKey).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}_charge_kw`;
       if (vehicle.battery_level !== null && vehicle.battery_level !== undefined) {
@@ -370,7 +391,7 @@ function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
           socKey,
           timestamp,
           Number(vehicle.battery_level),
-          { label: `${vehicle.name} SoC`, unit: "%", color: "#7db0ff", axis: "percent" },
+          { label: `${vehicle.name} SoC`, unit: "%", color: vehicleColor, axis: "percent" },
         );
       }
       if (vehicle.charge_power_kw !== null && vehicle.charge_power_kw !== undefined) {
@@ -378,7 +399,7 @@ function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
           chargeKey,
           timestamp,
           Number(vehicle.charge_power_kw),
-          { label: `${vehicle.name} charge rate`, unit: "kW", color: "#2bd9a0", axis: "power" },
+          { label: `${vehicle.name} charge rate`, unit: "kW", color: vehicleColor, axis: "power" },
         );
       }
     });
