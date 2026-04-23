@@ -34,6 +34,7 @@ class PersistedAutomationState(BaseModel):
     global_enabled: bool = True
     rules: dict[str, PersistedAutomationRule] = Field(
         default_factory=lambda: {
+            "plug_in_hold": PersistedAutomationRule(enabled=True),
             "off_peak_midday": PersistedAutomationRule(enabled=True),
             "solar_match": PersistedAutomationRule(enabled=True),
             "battery_floor_pause": PersistedAutomationRule(enabled=True),
@@ -75,11 +76,20 @@ def load_persisted_state() -> PersistedAutomationState:
         save_persisted_state(state)
         return state
     try:
-        return PersistedAutomationState.model_validate_json(AUTOMATION_FILE.read_text())
+        state = PersistedAutomationState.model_validate_json(AUTOMATION_FILE.read_text())
     except Exception:
         state = PersistedAutomationState()
         save_persisted_state(state)
         return state
+    default_rules = PersistedAutomationState().rules
+    updated = False
+    for rule_id, default_rule in default_rules.items():
+        if rule_id not in state.rules:
+            state.rules[rule_id] = default_rule
+            updated = True
+    if updated:
+        save_persisted_state(state)
+    return state
 
 
 def save_persisted_state(state: PersistedAutomationState) -> None:
@@ -158,7 +168,12 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
     now = datetime.now(LOCAL_TZ)
     battery_soc = _latest_value(data, "growatt_soc_pct")
     solar_kw = _latest_value(data, "solar_input_kw") or 0.0
+    tesla_vehicle_connected = any(
+        vehicle.source == "Tesla Vehicle" and (vehicle.plugged_in or str(vehicle.charging_state or "").lower() in {"charging", "stopped", "complete"})
+        for vehicle in data.vehicles
+    )
 
+    rule_0_enabled = state.rules["plug_in_hold"].enabled
     rule_1_enabled = state.rules["off_peak_midday"].enabled
     rule_2_enabled = state.rules["solar_match"].enabled
     rule_3_enabled = state.rules["battery_floor_pause"].enabled
@@ -172,8 +187,10 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
     )
     battery_floor_active = rule_3_enabled and battery_soc is not None and battery_soc < 40
     night_trickle_active = rule_4_enabled and 0 <= now.hour < 6 and (battery_soc or 0.0) > 50
+    plug_in_hold_active = rule_0_enabled and tesla_vehicle_connected and not any([midday_active, solar_match_active, battery_floor_active, night_trickle_active])
 
     if not state.global_enabled:
+        plug_in_hold_active = False
         midday_active = False
         solar_match_active = False
         battery_floor_active = False
@@ -183,6 +200,18 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
     night_trickle_amps = clamp_amps(round((1.5 * 1000.0) / VOLTAGE))
 
     rules = [
+        AutomationRule(
+            id="plug_in_hold",
+            label="Plug-in hold",
+            description="When a Tesla is plugged in, keep charging paused until a charging rule or manual charge explicitly enables it.",
+            enabled=rule_0_enabled,
+            active=plug_in_hold_active,
+            detail=(
+                "A vehicle is connected, so charging is being held until another rule allows it."
+                if plug_in_hold_active
+                else "Pauses newly plugged-in vehicles until a charging rule becomes active."
+            ),
+        ),
         AutomationRule(
             id="off_peak_midday",
             label="12pm-2pm off-peak",
@@ -256,6 +285,9 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
     elif not state.global_enabled:
         effective_mode = "Automation paused"
         effective_detail = "Combined automation toggle is off."
+    elif plug_in_hold_active:
+        effective_mode = "Plug-in hold"
+        effective_detail = "A connected Tesla will stay paused until another rule or manual charge enables charging."
     elif battery_floor_active:
         effective_mode = "Pause charging"
         effective_detail = "Battery floor rule is pausing all Tesla charging."

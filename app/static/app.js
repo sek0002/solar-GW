@@ -3,6 +3,8 @@ const refreshSeconds = Number(document.body.dataset.refresh || "30");
 const chartStore = new Map();
 const lastKnownVehicleBatteryLevels = new Map();
 const lastKnownTeslaVehicles = new Map();
+const MAX_STORED_POINTS = 1440;
+const MAX_RENDERED_POINTS = 240;
 let energyChart = null;
 let vehicleChart = null;
 let activeEnergyChartKey = null;
@@ -12,6 +14,26 @@ let vehicleChartWindowHours = 6;
 let automationPanelOpen = false;
 const MANUAL_CHARGE_STORAGE_KEY = "solar-gw-manual-charge";
 const TESLA_VEHICLE_STORAGE_KEY = "solar-gw-tesla-vehicles";
+const SERIES_DEFAULTS = {
+  solar_input_kw: { label: "Solar input", unit: "kW", color: "#f7c66b", axis: "power" },
+  growatt_load_kw: { label: "Load consumption", unit: "kW", color: "#61e6ff", axis: "power" },
+  grid_import_kw: { label: "Grid import", unit: "kW", color: "#ff8d7d", axis: "power" },
+  growatt_soc_pct: { label: "Growatt battery SoC", unit: "%", color: "#8bf0b5", axis: "percent" },
+  growatt_battery_charge_kw: { label: "Growatt battery charge", unit: "kW", color: "#4cc9f0", axis: "power" },
+  growatt_battery_discharge_kw: { label: "Growatt battery discharge", unit: "kW", color: "#ff9cf0", axis: "power" },
+  tesla_ev_charge_kw: { label: "Tesla EV charging", unit: "kW", color: "#ff5fa2", axis: "power" },
+};
+const SOURCE_ZERO_SERIES = {
+  Growatt: [
+    "growatt_load_kw",
+    "grid_import_kw",
+    "growatt_soc_pct",
+    "growatt_battery_charge_kw",
+    "growatt_battery_discharge_kw",
+  ],
+  GoodWe: ["solar_input_kw"],
+  "Tesla Charging": ["tesla_ev_charge_kw"],
+};
 
 function formatValue(value, unit = "") {
   if (value === null || value === undefined || value === "") return "N/A";
@@ -110,6 +132,39 @@ function saveTeslaVehicleCache() {
   }
 }
 
+function trimSeriesPoints(points) {
+  return Array.from(points.entries()).sort((a, b) => new Date(a[0]) - new Date(b[0])).slice(-MAX_STORED_POINTS);
+}
+
+function ensureChartSeries(key, defaults = {}) {
+  const existing = chartStore.get(key);
+  if (existing) {
+    return existing;
+  }
+  const created = {
+    key,
+    label: defaults.label || key,
+    unit: defaults.unit || "",
+    color: defaults.color || "#ffffff",
+    axis: defaults.axis || "power",
+    points: new Map(),
+  };
+  chartStore.set(key, created);
+  return created;
+}
+
+function appendChartPoint(key, timestamp, value, defaults = {}) {
+  if (!timestamp) return;
+  const series = ensureChartSeries(key, defaults);
+  series.label = defaults.label || series.label;
+  series.unit = defaults.unit || series.unit;
+  series.color = defaults.color || series.color;
+  series.axis = defaults.axis || series.axis;
+  series.points.set(timestamp, { value, state: null });
+  series.points = new Map(trimSeriesPoints(series.points));
+  chartStore.set(key, series);
+}
+
 function hydrateTeslaVehicles(vehicles) {
   const liveVehicles = Array.isArray(vehicles) ? vehicles : [];
   const mergedVehicles = liveVehicles.map((vehicle) => {
@@ -161,6 +216,43 @@ function hydrateTeslaVehicles(vehicles) {
     ...mergedVehicles,
     ...staleVehicles,
   ];
+}
+
+function appendDisconnectedSourcePoints(data, timestamp) {
+  const sourceStatuses = new Map((data.sources || []).map((source) => [source.name, source.status]));
+  Object.entries(SOURCE_ZERO_SERIES).forEach(([sourceName, seriesKeys]) => {
+    const status = sourceStatuses.get(sourceName);
+    if (status && status !== "disconnected") return;
+    seriesKeys.forEach((seriesKey) => {
+      appendChartPoint(seriesKey, timestamp, 0, SERIES_DEFAULTS[seriesKey] || {});
+    });
+  });
+}
+
+function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
+  (vehicles || [])
+    .filter((vehicle) => vehicle.source === "Tesla Vehicle")
+    .forEach((vehicle) => {
+      const vehicleKey = vehicle.name || vehicle.vin || "tesla";
+      const socKey = `vehicle_${String(vehicleKey).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}_soc_pct`;
+      const chargeKey = `vehicle_${String(vehicleKey).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}_charge_kw`;
+      if (vehicle.battery_level !== null && vehicle.battery_level !== undefined) {
+        appendChartPoint(
+          socKey,
+          timestamp,
+          Number(vehicle.battery_level),
+          { label: `${vehicle.name} SoC`, unit: "%", color: "#7db0ff", axis: "percent" },
+        );
+      }
+      if (vehicle.charge_power_kw !== null && vehicle.charge_power_kw !== undefined) {
+        appendChartPoint(
+          chargeKey,
+          timestamp,
+          Number(vehicle.charge_power_kw),
+          { label: `${vehicle.name} charge rate`, unit: "kW", color: "#2bd9a0", axis: "power" },
+        );
+      }
+    });
 }
 
 function getVehicleStatusMeta(vehicle) {
@@ -579,8 +671,7 @@ function mergeEnergySeries(seriesList) {
       });
     });
 
-    const ordered = Array.from(existing.points.entries()).sort((a, b) => new Date(a[0]) - new Date(b[0])).slice(-360);
-    existing.points = new Map(ordered);
+    existing.points = new Map(trimSeriesPoints(existing.points));
     chartStore.set(series.key, existing);
   });
 }
@@ -614,19 +705,32 @@ function formatXAxisLabel(timestamp, hours) {
   return new Date(Number(timestamp)).toLocaleString([], options);
 }
 
+function downsamplePoints(points, maxPoints = MAX_RENDERED_POINTS) {
+  if (points.length <= maxPoints) return points;
+  if (maxPoints <= 2) return [points[0], points[points.length - 1]];
+  const result = [points[0]];
+  const stride = (points.length - 2) / (maxPoints - 2);
+  for (let index = 1; index < maxPoints - 1; index += 1) {
+    const sourceIndex = Math.min(points.length - 2, Math.round(index * stride));
+    result.push(points[sourceIndex]);
+  }
+  result.push(points[points.length - 1]);
+  return result;
+}
+
 function buildChartState(filterFn, activeKey, hours) {
   const filteredSeries = Array.from(chartStore.values()).filter((series) => filterFn(series));
   const { windowStart, windowEnd } = getChartWindow(filteredSeries, hours);
 
   const datasets = filteredSeries.map((series) => {
     const highlighted = !activeKey || activeKey === series.key;
-    const data = Array.from(series.points.entries())
+    const data = downsamplePoints(Array.from(series.points.entries())
       .map(([timestamp, point]) => ({
         x: new Date(timestamp).getTime(),
         y: point?.value ?? null,
         state: point?.state || null,
       }))
-      .filter((point) => point.x >= windowStart && point.x <= windowEnd);
+      .filter((point) => point.x >= windowStart && point.x <= windowEnd));
     return {
       label: series.label,
       key: series.key,
@@ -881,6 +985,9 @@ function renderVehicleChart() {
 function renderDashboard(data) {
   mergeEnergySeries(data.energy_chart || []);
   const displayVehicles = hydrateTeslaVehicles(data.vehicles || []);
+  const timestamp = data.updated_at || new Date().toISOString();
+  appendDisconnectedSourcePoints(data, timestamp);
+  appendTeslaVehicleFallbackPoints(displayVehicles, timestamp);
   renderPowerFlow(data.power_flow || {});
   syncChartWindowControls("energy");
   syncChartWindowControls("vehicle");
