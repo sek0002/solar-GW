@@ -24,17 +24,16 @@ const SERIES_DEFAULTS = {
   growatt_battery_discharge_kw: { label: "Growatt battery discharge", unit: "kW", color: "#ff9cf0", axis: "power" },
   tesla_ev_charge_kw: { label: "Tesla EV charging", unit: "kW", color: "#ff5fa2", axis: "power" },
 };
-const SOURCE_ZERO_SERIES = {
+const SOURCE_AVERAGED_SERIES = {
   Growatt: [
     "growatt_load_kw",
     "grid_import_kw",
+    "growatt_soc_pct",
     "growatt_battery_charge_kw",
     "growatt_battery_discharge_kw",
   ],
   GoodWe: ["solar_input_kw"],
-};
-const SOURCE_AVERAGED_SERIES = {
-  Growatt: ["growatt_soc_pct"],
+  "Tesla Charging": ["tesla_ev_charge_kw"],
 };
 const SOURCE_CONNECTED_SERIES = {
   Growatt: [
@@ -320,25 +319,23 @@ function hydrateTeslaVehicles(vehicles) {
 
 function appendDisconnectedSourcePoints(data, timestamp) {
   const sourceStatuses = new Map((data.sources || []).map((source) => [source.name, source.status]));
-  Object.entries(SOURCE_ZERO_SERIES).forEach(([sourceName, seriesKeys]) => {
-    const status = sourceStatuses.get(sourceName);
-    if (status && status !== "disconnected") return;
-    seriesKeys.forEach((seriesKey) => {
-      appendChartPoint(seriesKey, timestamp, 0, SERIES_DEFAULTS[seriesKey] || {});
-    });
-  });
-
   Object.entries(SOURCE_AVERAGED_SERIES).forEach(([sourceName, seriesKeys]) => {
     const status = sourceStatuses.get(sourceName);
     if (status && status !== "disconnected") return;
     seriesKeys.forEach((seriesKey) => {
       const series = chartStore.get(seriesKey);
-      if (!series) return;
+      if (!series) {
+        appendChartPoint(seriesKey, timestamp, 0, SERIES_DEFAULTS[seriesKey] || {});
+        return;
+      }
       const recentValues = Array.from(series.points.values())
         .map((point) => point?.value)
         .filter((value) => Number.isFinite(value))
         .slice(-10);
-      if (!recentValues.length) return;
+      if (!recentValues.length) {
+        appendChartPoint(seriesKey, timestamp, 0, SERIES_DEFAULTS[seriesKey] || {});
+        return;
+      }
       const averageValue = recentValues.reduce((sum, value) => sum + value, 0) / recentValues.length;
       appendChartPoint(seriesKey, timestamp, averageValue, SERIES_DEFAULTS[seriesKey] || {});
     });

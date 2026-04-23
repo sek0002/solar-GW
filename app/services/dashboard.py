@@ -12,6 +12,7 @@ from app.providers.goodwe import load_goodwe_snapshot
 from app.providers.growatt import load_growatt_snapshot
 from app.providers.generic_vendor import load_vendor_snapshot
 from app.providers.tesla import load_tesla_vehicle_snapshot
+from app.services.chart_history import load_chart_history, store_chart_history
 from app.services.automation_state import build_automation_panel
 
 NON_TESLA_SNAPSHOT_TTL = timedelta(minutes=1)
@@ -215,12 +216,16 @@ async def build_dashboard_data(settings: Settings) -> DashboardData:
 
     metrics = metrics[:8]
 
+    live_energy_chart = list(energy_chart)
+    store_chart_history(settings, live_energy_chart)
+    persisted_energy_chart = load_chart_history(settings)
+
     dashboard = DashboardData(
         site_name=settings.dashboard_title,
         refresh_interval_seconds=settings.refresh_interval_seconds,
         power_flow=power_flow,
         summary_metrics=metrics,
-        energy_chart=energy_chart,
+        energy_chart=persisted_energy_chart or live_energy_chart,
         batteries=batteries,
         chargers=chargers,
         plants=plants,
@@ -228,5 +233,7 @@ async def build_dashboard_data(settings: Settings) -> DashboardData:
         sources=sources,
         notes=notes,
     )
-    dashboard.automation_panel = build_automation_panel(dashboard)
+    automation_dashboard = dashboard.model_copy(deep=True)
+    automation_dashboard.energy_chart = live_energy_chart
+    dashboard.automation_panel = build_automation_panel(automation_dashboard)
     return dashboard

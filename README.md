@@ -98,6 +98,17 @@ The implementation uses Tesla Fleet API OAuth endpoints and vehicle data:
 Tesla’s official Fleet API docs expose vehicle charging state and recommend Fleet Telemetry for efficient realtime monitoring. I did not find an official standalone Wall Connector device endpoint in the Fleet API docs, so the dashboard models charger sessions from vehicle charge state instead.
 Vehicle-level access may still require Tesla virtual-key pairing and, on some vehicles, enabling `Allow Third-Party App Data Streaming`.
 
+## Persistent chart history
+
+Chart history is now stored server-side in SQLite so energy and Tesla traces stay synchronized across browsers and devices.
+
+Configure these optional values in `.env` if you want to override the defaults:
+
+- `CHART_HISTORY_DB_PATH`
+- `CHART_HISTORY_RETENTION_HOURS`
+
+By default the app keeps seven days of chart points in `.data/chart_history.sqlite3`.
+
 ### Growatt
 
 Growatt API access is commonly tied to ShineServer/OSS account permissions and API tokens. The app accepts:

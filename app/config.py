@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     app_auth_cookie_secure: bool = False
     app_auth_lockout_minutes: int = 15
     app_auth_max_attempts: int = 5
+    chart_history_db_path: str = ".data/chart_history.sqlite3"
+    chart_history_retention_hours: int = 168
 
     tesla_api_base_url: str = "https://fleet-api.prd.na.vn.cloud.tesla.com"
     tesla_auth_url: str = "https://auth.tesla.com/oauth2/v3/authorize"
