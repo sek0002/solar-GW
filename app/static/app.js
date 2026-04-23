@@ -429,6 +429,21 @@ function getChargeSpeedMarkup({ amps = null, kw = null, label = "Live", accent =
   return `<span class="status-metric status-metric-${accent}${plain ? " status-metric-plain" : ""}" title="${label}">${parts.join(" · ")}</span>`;
 }
 
+function getVehicleStatusMetricMarkup(vehicle) {
+  const parts = [];
+  if (Number.isFinite(vehicle?.battery_level)) {
+    parts.push(formatInlineMetric(Number(vehicle.battery_level), "%", 0));
+  }
+  if (Number.isFinite(vehicle?.charge_current_a) && Number(vehicle.charge_current_a) > 0) {
+    parts.push(formatInlineMetric(Number(vehicle.charge_current_a), "A", Number(vehicle.charge_current_a) < 10 ? 1 : 0));
+  }
+  if (Number.isFinite(vehicle?.charge_power_kw) && Number(vehicle.charge_power_kw) > 0) {
+    parts.push(formatInlineMetric(Number(vehicle.charge_power_kw), "kW", Number(vehicle.charge_power_kw) < 10 ? 1 : 0));
+  }
+  if (!parts.length) return "";
+  return `<span class="status-metric status-metric-accent status-metric-plain" title="${vehicle?.name || "Vehicle"} state">${parts.join(" · ")}</span>`;
+}
+
 function getBatteryFillStyle(level) {
   const value = Math.max(0, Math.min(100, Number(level || 0)));
   return `width:${value}%;background:linear-gradient(90deg,#ff5a5f 0%,#f5d547 58%,#46d37b 100%);`;
@@ -515,16 +530,19 @@ function renderBatteryRail(vehicles, batteries, powerFlow) {
       name: "Solar input",
       value: Math.max(0, getLatestSeriesValue("solar_input_kw")),
       color: "#f7c66b",
+      scaleMax: 5,
     },
     {
       name: "Load consumption",
       value: Math.max(0, Number(powerFlow?.home_kw) || 0),
       color: "#61e6ff",
+      scaleMax: 11,
     },
     {
       name: "Grid import",
       value: Math.max(0, Number(powerFlow?.grid_kw) || 0),
       color: "#ff8d7d",
+      scaleMax: 11,
     },
   ];
   const growattChargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_charge_kw"));
@@ -535,9 +553,8 @@ function renderBatteryRail(vehicles, batteries, powerFlow) {
     value: growattBatteryKw,
     color: growattBatteryKw >= 0 ? "#4cc9f0" : "#ff9cf0",
     signed: true,
+    scaleMax: 11,
   });
-  const trackerMax = Math.max(1, ...trackerItems.map((item) => item.value));
-  const signedTrackerMax = Math.max(1, ...trackerItems.map((item) => Math.abs(item.value)));
 
   root.innerHTML = `
     <div class="battery-bar-row">
@@ -553,7 +570,7 @@ function renderBatteryRail(vehicles, batteries, powerFlow) {
                 <span>${item.signed ? formatValue(item.value, "kW") : formatValue(item.value, "kW")}</span>
               </div>
               <div class="system-tracker-track ${item.signed ? "system-tracker-track-signed" : ""}">
-                <div class="system-tracker-fill" style="${item.signed ? getSignedTrackerFillStyle(item.value, signedTrackerMax) : getTrackerFillStyle(item.value, trackerMax, item.color)}"></div>
+                <div class="system-tracker-fill" style="${item.signed ? getSignedTrackerFillStyle(item.value, item.scaleMax || 1) : getTrackerFillStyle(item.value, item.scaleMax || 1, item.color)}"></div>
               </div>
             </article>
           `,
@@ -684,13 +701,21 @@ function renderSources(sources, vehicles, chargers, powerFlow) {
   const growattChargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_charge_kw"));
   const growattDischargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_discharge_kw"));
   const growattBatteryKw = growattChargeKw > 0 ? growattChargeKw : growattDischargeKw > 0 ? -growattDischargeKw : 0;
+  const growattSocPct = getLatestSeriesValue("growatt_soc_pct");
 
   const providerMarkup = sources
     .map((source) => {
       let metric = "";
       if (source.name === "Growatt Hybrid") {
-        metric = Number.isFinite(growattBatteryKw) && growattBatteryKw !== 0
-          ? `<span class="status-metric ${growattBatteryKw >= 0 ? "status-metric-accent" : "status-metric-warn"} status-metric-plain" title="Battery power">${formatInlineMetric(growattBatteryKw, "kW", Math.abs(growattBatteryKw) < 10 ? 1 : 0)}</span>`
+        const batteryParts = [];
+        if (Number.isFinite(growattSocPct) && growattSocPct > 0) {
+          batteryParts.push(formatInlineMetric(growattSocPct, "%", 0));
+        }
+        if (Number.isFinite(growattBatteryKw) && growattBatteryKw !== 0) {
+          batteryParts.push(formatInlineMetric(growattBatteryKw, "kW", Math.abs(growattBatteryKw) < 10 ? 1 : 0));
+        }
+        metric = batteryParts.length
+          ? `<span class="status-metric ${growattBatteryKw >= 0 ? "status-metric-accent" : "status-metric-warn"} status-metric-plain" title="Battery state">${batteryParts.join(" · ")}</span>`
           : "";
       } else if (source.name === "Tesla Charging") {
         metric = getChargeSpeedMarkup({
@@ -719,13 +744,7 @@ function renderSources(sources, vehicles, chargers, powerFlow) {
     .filter((vehicle) => vehicle.source === "Tesla Vehicle")
     .map((vehicle) => {
       const status = getVehicleStatusMeta(vehicle);
-      const metric = getChargeSpeedMarkup({
-        amps: Number(vehicle.charge_current_a),
-        kw: Number(vehicle.charge_power_kw),
-        label: `${vehicle.name} live speed`,
-        accent: "accent",
-        plain: true,
-      });
+      const metric = getVehicleStatusMetricMarkup(vehicle);
       return `
         <div class="provider-pill vehicle-pill ${status.className}">
           <span>${vehicle.name}</span>
