@@ -105,8 +105,12 @@ async def _load_non_tesla_snapshots(settings: Settings):
 
 async def build_dashboard_data(settings: Settings) -> DashboardData:
     timeout = httpx.Timeout(settings.request_timeout_seconds)
+    tesla_snapshot = None
     async with httpx.AsyncClient(timeout=timeout) as client:
-        tesla_snapshot = await load_tesla_vehicle_snapshot(client, settings)
+        try:
+            tesla_snapshot = await load_tesla_vehicle_snapshot(client, settings)
+        except Exception as exc:
+            tesla_snapshot = exc
 
     snapshots = [tesla_snapshot, *await _load_non_tesla_snapshots(settings)]
 
@@ -217,8 +221,12 @@ async def build_dashboard_data(settings: Settings) -> DashboardData:
     metrics = metrics[:8]
 
     live_energy_chart = list(energy_chart)
-    store_chart_history(settings, live_energy_chart)
-    persisted_energy_chart = load_chart_history(settings)
+    persisted_energy_chart: list[EnergyChartSeries] = []
+    try:
+        store_chart_history(settings, live_energy_chart)
+        persisted_energy_chart = load_chart_history(settings)
+    except Exception as exc:
+        notes.append(f"Chart history is temporarily unavailable: {exc}")
 
     dashboard = DashboardData(
         site_name=settings.dashboard_title,
