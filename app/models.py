@@ -114,6 +114,7 @@ class AutomationPanel(BaseModel):
     rules: list[AutomationRule] = Field(default_factory=list)
     manual_charge: ManualChargeControl = Field(default_factory=ManualChargeControl)
     tesla_vehicle_connected: bool = False
+    tesla_charge_vehicle_count: int = 0
     stop_charging_required: bool = False
     effective_mode: str = "Idle"
     effective_detail: str = "Automation waiting for an active rule."

@@ -141,6 +141,7 @@ def automation_signature(panel: AutomationPanel) -> str:
             "global_enabled": panel.global_enabled,
             "manual_enabled": panel.manual_charge.enabled,
             "tesla_vehicle_connected": panel.tesla_vehicle_connected,
+            "tesla_charge_vehicle_count": panel.tesla_charge_vehicle_count,
             "effective_mode": panel.effective_mode,
             "effective_target_amps": panel.effective_target_amps,
         },
@@ -164,6 +165,7 @@ def stop_check_signature(panel: AutomationPanel) -> str:
     return json.dumps(
         {
             "tesla_vehicle_connected": panel.tesla_vehicle_connected,
+            "tesla_charge_vehicle_count": panel.tesla_charge_vehicle_count,
             "stop_charging_required": panel.stop_charging_required,
             "effective_mode": panel.effective_mode,
         },
@@ -230,10 +232,13 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
     battery_soc = _latest_value(data, "growatt_soc_pct")
     solar_kw = _latest_value(data, "solar_input_kw") or 0.0
     solar_kw_avg_10m = _average_over_window(data, "solar_input_kw", minutes=10)
-    tesla_vehicle_connected = any(
-        vehicle.source == "Tesla Vehicle" and (vehicle.plugged_in or str(vehicle.charging_state or "").lower() in {"charging", "stopped", "complete"})
+    tesla_charge_vehicle_count = sum(
+        1
         for vehicle in data.vehicles
+        if vehicle.source == "Tesla Vehicle"
+        and (vehicle.plugged_in or str(vehicle.charging_state or "").lower() in {"charging", "stopped", "complete"})
     )
+    tesla_vehicle_connected = tesla_charge_vehicle_count > 0
 
     rule_0_enabled = state.rules["plug_in_hold"].enabled
     rule_1_enabled = state.rules["off_peak_midday"].enabled
@@ -392,6 +397,7 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
         rules=rules,
         manual_charge=manual,
         tesla_vehicle_connected=tesla_vehicle_connected,
+        tesla_charge_vehicle_count=tesla_charge_vehicle_count,
         stop_charging_required=stop_charging_required,
         effective_mode=effective_mode,
         effective_detail=effective_detail,
