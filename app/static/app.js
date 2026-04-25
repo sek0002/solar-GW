@@ -568,7 +568,14 @@ function renderBatteryRail(vehicles, batteries, powerFlow) {
   ];
   const growattChargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_charge_kw"));
   const growattDischargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_discharge_kw"));
-  const growattBatteryKw = growattChargeKw > 0 ? growattChargeKw : growattDischargeKw > 0 ? -growattDischargeKw : 0;
+  const liveBatteryKw = Number(powerFlow?.battery_kw);
+  const growattBatteryKw = Number.isFinite(liveBatteryKw)
+    ? liveBatteryKw
+    : growattChargeKw > 0
+      ? growattChargeKw
+      : growattDischargeKw > 0
+        ? -growattDischargeKw
+        : 0;
   trackerItems.push({
     name: "Battery",
     value: growattBatteryKw,
@@ -721,7 +728,14 @@ function renderSources(sources, vehicles, chargers, powerFlow) {
     .reduce((sum, vehicle) => sum + (Number(vehicle.charge_current_a) || 0), 0);
   const growattChargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_charge_kw"));
   const growattDischargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_discharge_kw"));
-  const growattBatteryKw = growattChargeKw > 0 ? growattChargeKw : growattDischargeKw > 0 ? -growattDischargeKw : 0;
+  const liveBatteryKw = Number(powerFlow?.battery_kw);
+  const growattBatteryKw = Number.isFinite(liveBatteryKw)
+    ? liveBatteryKw
+    : growattChargeKw > 0
+      ? growattChargeKw
+      : growattDischargeKw > 0
+        ? -growattDischargeKw
+        : 0;
   const growattSocPct = getLatestSeriesValue("growatt_soc_pct");
 
   const providerMarkup = sources

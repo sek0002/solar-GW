@@ -233,7 +233,7 @@ async def load_growatt_snapshot(settings: Settings) -> ProviderSnapshot | None:
                 if battery_charge_points or battery_discharge_points:
                     latest_charge_kw = battery_charge_points[-1]["value"] if battery_charge_points else 0.0
                     latest_discharge_kw = battery_discharge_points[-1]["value"] if battery_discharge_points else 0.0
-                    latest_battery_power_kw = (latest_discharge_kw or 0.0) or (latest_charge_kw or 0.0)
+                    latest_battery_power_kw = (latest_charge_kw or 0.0) if (latest_charge_kw or 0.0) > 0 else -(latest_discharge_kw or 0.0)
                     chart_series.append(
                         {
                             "key": "growatt_battery_charge_kw",
@@ -269,7 +269,7 @@ async def load_growatt_snapshot(settings: Settings) -> ProviderSnapshot | None:
             or detail_payload.get("bms_soc")
         )
         battery_kw = (
-            (_as_float(detail_payload.get("pdischarge1")) or 0.0) - (_as_float(detail_payload.get("pcharge1")) or 0.0)
+            (_as_float(detail_payload.get("pcharge1")) or 0.0) - (_as_float(detail_payload.get("pdischarge1")) or 0.0)
             or detail_payload.get("charge_power")
             or detail_payload.get("pacToUserr")
             or detail_payload.get("ppv")
