@@ -113,7 +113,9 @@ async def _background_history_sampler() -> None:
         settings = get_settings()
         interval = max(30, int(settings.background_history_interval_seconds or 0))
         try:
-            await build_dashboard_data(settings)
+            data = await build_dashboard_data(settings)
+            await _maybe_apply_automation(settings, data.automation_panel)
+            await _maybe_enforce_charge_stop(settings, data)
         except Exception:
             # Keep background sampling resilient; live requests can still surface provider issues.
             pass
