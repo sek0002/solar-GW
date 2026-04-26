@@ -1,0 +1,16 @@
+[Unit]
+Description=solar-GW automation worker
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/solar-gw
+EnvironmentFile=/opt/solar-gw/.env
+ExecStart=/opt/solar-gw/.venv/bin/python -m app.automation_worker
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

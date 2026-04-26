@@ -153,3 +153,32 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now solar-gw.service
 sudo systemctl status solar-gw.service
 ```
+
+If you want automations and chart-history sampling to keep running even when the FastAPI web app is stopped, install the standalone worker too:
+
+```bash
+sudo cp systemd/solar-gw-automation.service /etc/systemd/system/solar-gw-automation.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now solar-gw-automation.service
+sudo systemctl status solar-gw-automation.service
+```
+
+The worker runs the same background cycle as the web app:
+- stores chart history on the configured interval
+- evaluates automation rules
+- applies Tesla charge targets
+- retries stop-required states
+
+You can tune the worker cadence with:
+
+```env
+BACKGROUND_HISTORY_INTERVAL_SECONDS=120
+```
+
+If you run the standalone worker, disable the web app’s built-in sampler so both processes do not issue the same automation commands:
+
+```env
+WEB_BACKGROUND_SAMPLER_ENABLED=false
+```
+
+Set `BACKGROUND_HISTORY_INTERVAL_SECONDS=0` or disable the service if you do not want the standalone worker running.

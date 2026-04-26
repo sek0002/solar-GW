@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     refresh_interval_seconds: int = 30
     request_timeout_seconds: float = 15.0
     background_history_interval_seconds: int = 120
+    web_background_sampler_enabled: bool = True
     demo_mode: bool = True
     app_auth_secret: str | None = None
     app_otp_totp_secret: str | None = None

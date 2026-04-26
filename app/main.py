@@ -12,7 +12,6 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import Settings, get_settings
-from app.providers.tesla import invalidate_tesla_snapshot_cache
 from app.services.auth import (
     clear_login_failures,
     create_session_token,
@@ -24,23 +23,12 @@ from app.services.auth import (
     verify_otp_code,
     verify_session_token,
 )
+from app.services.background_runner import background_sampler_loop, maybe_apply_automation, maybe_enforce_charge_stop
 from app.services.dashboard import build_dashboard_data
-from app.services.tesla_commands import apply_automation_panel, apply_manual_charge_request, enforce_charge_stop_for_panel
+from app.services.tesla_commands import apply_manual_charge_request
 from app.services.tesla_partner import build_partner_status, register_partner_domain
 from app.services.tesla_keys import WELL_KNOWN_TESLA_PUBLIC_KEY_PATH, ensure_tesla_keypair, get_public_key_path
-from app.services.automation_state import (
-    GlobalAutomationPayload,
-    ManualChargePayload,
-    RuleTogglePayload,
-    mark_charge_stop_checked,
-    mark_automation_applied,
-    should_apply_automation,
-    should_retry_charge_stop,
-    update_global_automation,
-    update_manual_charge,
-    update_manual_charge_result,
-    update_rule,
-)
+from app.services.automation_state import GlobalAutomationPayload, ManualChargePayload, RuleTogglePayload, mark_automation_applied, update_global_automation, update_manual_charge, update_manual_charge_result, update_rule
 from app.services.tesla_oauth import (
     TeslaOAuthError,
     build_authorize_url,
@@ -108,27 +96,13 @@ class OTPAuthMiddleware(BaseHTTPMiddleware):
 app.add_middleware(OTPAuthMiddleware)
 
 
-async def _background_history_sampler() -> None:
-    while True:
-        settings = get_settings()
-        interval = max(30, int(settings.background_history_interval_seconds or 0))
-        try:
-            data = await build_dashboard_data(settings)
-            await _maybe_apply_automation(settings, data.automation_panel)
-            await _maybe_enforce_charge_stop(settings, data)
-        except Exception:
-            # Keep background sampling resilient; live requests can still surface provider issues.
-            pass
-        await asyncio.sleep(interval)
-
-
 @app.on_event("startup")
 async def startup_background_sampler() -> None:
     settings = get_settings()
-    if int(settings.background_history_interval_seconds or 0) <= 0:
+    if not settings.web_background_sampler_enabled or int(settings.background_history_interval_seconds or 0) <= 0:
         app.state.history_sampler_task = None
         return
-    app.state.history_sampler_task = asyncio.create_task(_background_history_sampler())
+    app.state.history_sampler_task = asyncio.create_task(background_sampler_loop(settings))
 
 
 @app.on_event("shutdown")
@@ -193,35 +167,6 @@ def _set_auth_cookie(response: RedirectResponse, settings: Settings, token: str)
 
 def _clear_auth_cookie(response: RedirectResponse, settings: Settings) -> None:
     response.delete_cookie(settings.app_auth_cookie_name, httponly=True, samesite="lax")
-
-
-async def _maybe_apply_automation(settings: Settings, panel) -> dict | None:
-    if panel.stop_charging_required or panel.effective_target_amps is None:
-        if should_apply_automation(panel):
-            mark_automation_applied(panel)
-        return None
-    if not should_apply_automation(panel):
-        return None
-    command_result = await apply_automation_panel(settings, panel)
-    invalidate_tesla_snapshot_cache()
-    update_manual_charge_result(command_result)
-    mark_automation_applied(panel)
-    return command_result
-
-
-async def _maybe_enforce_charge_stop(settings: Settings, data) -> dict | None:
-    panel = data.automation_panel
-    tesla_charging_active = any(
-        vehicle.source == "Tesla Vehicle" and str(vehicle.charging_state or "").lower() == "charging"
-        for vehicle in data.vehicles
-    )
-    if not should_retry_charge_stop(panel, tesla_charging_active):
-        return None
-    command_result = await enforce_charge_stop_for_panel(settings, panel)
-    invalidate_tesla_snapshot_cache()
-    update_manual_charge_result(command_result)
-    mark_charge_stop_checked(panel)
-    return command_result
 
 
 @app.get("/login", response_class=HTMLResponse)
