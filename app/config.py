@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     dashboard_title: str = "Home Energy Control"
     refresh_interval_seconds: int = 30
     request_timeout_seconds: float = 15.0
+    background_history_interval_seconds: int = 120
     demo_mode: bool = True
     app_auth_secret: str | None = None
     app_otp_totp_secret: str | None = None

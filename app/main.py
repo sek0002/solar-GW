@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -105,6 +106,39 @@ class OTPAuthMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(OTPAuthMiddleware)
+
+
+async def _background_history_sampler() -> None:
+    while True:
+        settings = get_settings()
+        interval = max(30, int(settings.background_history_interval_seconds or 0))
+        try:
+            await build_dashboard_data(settings)
+        except Exception:
+            # Keep background sampling resilient; live requests can still surface provider issues.
+            pass
+        await asyncio.sleep(interval)
+
+
+@app.on_event("startup")
+async def startup_background_sampler() -> None:
+    settings = get_settings()
+    if int(settings.background_history_interval_seconds or 0) <= 0:
+        app.state.history_sampler_task = None
+        return
+    app.state.history_sampler_task = asyncio.create_task(_background_history_sampler())
+
+
+@app.on_event("shutdown")
+async def shutdown_background_sampler() -> None:
+    task = getattr(app.state, "history_sampler_task", None)
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 @app.get("/assets/styles.css")
