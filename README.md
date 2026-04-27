@@ -154,6 +154,8 @@ sudo systemctl enable --now solar-gw.service
 sudo systemctl status solar-gw.service
 ```
 
+The bundled service uses `python -m uvicorn` instead of the `uvicorn` wrapper script so deployments do not break if a virtualenv was created on a different machine and the wrapper shebang points at the wrong absolute path.
+
 If you want automations and chart-history sampling to keep running even when the FastAPI web app is stopped, install the standalone worker too:
 
 ```bash
