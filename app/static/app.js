@@ -12,6 +12,7 @@ let energyChartWindowHours = 6;
 let vehicleChartWindowHours = 6;
 let automationPanelOpen = false;
 const MANUAL_CHARGE_STORAGE_KEY = "solar-gw-manual-charge";
+const DATA_SAVER_STORAGE_KEY = "solar-gw-data-saver";
 const TESLA_VEHICLE_STORAGE_KEY = "solar-gw-tesla-vehicles";
 const CHART_HISTORY_STORAGE_KEY = "solar-gw-chart-history";
 const CHART_POINT_INTERVAL_MS = 2 * 60 * 1000;
@@ -834,6 +835,30 @@ function saveManualChargeState(enabled, targetAmps) {
   }
 }
 
+function loadDataSaverState() {
+  try {
+    const raw = window.localStorage.getItem(DATA_SAVER_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Boolean(parsed.enabled);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function saveDataSaverState(enabled) {
+  try {
+    window.localStorage.setItem(
+      DATA_SAVER_STORAGE_KEY,
+      JSON.stringify({
+        enabled: Boolean(enabled),
+      }),
+    );
+  } catch (_error) {
+    // Ignore storage failures and keep the UI functional.
+  }
+}
+
 function updateManualChargeReadout(amps) {
   const numericAmps = Number(amps);
   const kw = ((numericAmps * 230) / 1000).toFixed(2);
@@ -879,10 +904,12 @@ function renderAutomationPanel(panel) {
   const dataSaverButton = document.getElementById("data-saver-button");
   globalToggle.checked = Boolean(panel.global_enabled);
   if (dataSaverButton) {
-    const dataSaverEnabled = Boolean(panel.data_saver_enabled);
+    const savedDataSaverState = loadDataSaverState();
+    const dataSaverEnabled = panel.data_saver_enabled ?? savedDataSaverState ?? false;
     dataSaverButton.textContent = dataSaverEnabled ? "Data-saver on" : "Data-saver off";
     dataSaverButton.setAttribute("aria-pressed", dataSaverEnabled ? "true" : "false");
     dataSaverButton.classList.toggle("icon-button-active", dataSaverEnabled);
+    saveDataSaverState(dataSaverEnabled);
   }
 
   document.getElementById("automation-mode").textContent = panel.effective_mode || "Idle";
@@ -1021,6 +1048,7 @@ function renderAutomationPanel(panel) {
     dataSaverButton.onclick = async () => {
       dataSaverButton.disabled = true;
       const enableDataSaver = dataSaverButton.getAttribute("aria-pressed") !== "true";
+      saveDataSaverState(enableDataSaver);
       const payload = await submitDataSaver(enableDataSaver);
       if (payload?.tesla?.detail) {
         document.getElementById("manual-charge-detail").textContent = payload.tesla.detail;

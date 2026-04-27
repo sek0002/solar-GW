@@ -84,13 +84,16 @@ def load_persisted_state() -> PersistedAutomationState:
         save_persisted_state(state)
         return state
     try:
-        state = PersistedAutomationState.model_validate_json(AUTOMATION_FILE.read_text())
+        raw_state = json.loads(AUTOMATION_FILE.read_text())
+        state = PersistedAutomationState.model_validate(raw_state)
     except Exception:
         state = PersistedAutomationState()
         save_persisted_state(state)
         return state
     default_rules = PersistedAutomationState().rules
     updated = False
+    if "data_saver_enabled" not in raw_state:
+        updated = True
     for rule_id, default_rule in default_rules.items():
         if rule_id not in state.rules:
             state.rules[rule_id] = default_rule
