@@ -23,7 +23,11 @@ from app.services.auth import (
     verify_otp_code,
     verify_session_token,
 )
-from app.services.background_runner import background_sampler_loop, maybe_apply_automation, maybe_enforce_charge_stop
+from app.services.background_runner import (
+    background_sampler_loop,
+    maybe_apply_automation as _maybe_apply_automation,
+    maybe_enforce_charge_stop as _maybe_enforce_charge_stop,
+)
 from app.services.dashboard import build_dashboard_data
 from app.providers.tesla import invalidate_tesla_snapshot_cache
 from app.services.tesla_commands import apply_manual_charge_request
