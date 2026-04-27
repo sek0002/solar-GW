@@ -1,0 +1,22 @@
+mqtt:
+  server: mqtt://127.0.0.1:1883
+  user: zigbee2mqtt
+  password: change-this-password
+  base_topic: zigbee2mqtt
+
+serial:
+  port: /dev/ttyUSB0
+  adapter: zstack
+
+frontend:
+  enabled: true
+  port: 8080
+
+homeassistant: false
+permit_join: false
+
+advanced:
+  log_level: info
+
+device_options:
+  retain: false

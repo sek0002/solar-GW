@@ -32,6 +32,7 @@ class PersistedManualCharge(BaseModel):
 
 class PersistedAutomationState(BaseModel):
     global_enabled: bool = True
+    data_saver_enabled: bool = False
     rules: dict[str, PersistedAutomationRule] = Field(
         default_factory=lambda: {
             "plug_in_hold": PersistedAutomationRule(enabled=True),
@@ -53,6 +54,10 @@ class RuleTogglePayload(BaseModel):
 
 
 class GlobalAutomationPayload(BaseModel):
+    enabled: bool
+
+
+class DataSaverPayload(BaseModel):
     enabled: bool
 
 
@@ -117,6 +122,13 @@ def update_global_automation(enabled: bool) -> PersistedAutomationState:
     return state
 
 
+def update_data_saver(enabled: bool) -> PersistedAutomationState:
+    state = load_persisted_state()
+    state.data_saver_enabled = enabled
+    save_persisted_state(state)
+    return state
+
+
 def update_manual_charge(enabled: bool, target_amps: int) -> PersistedAutomationState:
     state = load_persisted_state()
     state.manual_charge.enabled = enabled
@@ -139,6 +151,7 @@ def automation_signature(panel: AutomationPanel) -> str:
     return json.dumps(
         {
             "global_enabled": panel.global_enabled,
+            "data_saver_enabled": panel.data_saver_enabled,
             "manual_enabled": panel.manual_charge.enabled,
             "tesla_vehicle_connected": panel.tesla_vehicle_connected,
             "tesla_charge_vehicle_count": panel.tesla_charge_vehicle_count,
@@ -164,6 +177,7 @@ def mark_automation_applied(panel: AutomationPanel) -> PersistedAutomationState:
 def stop_check_signature(panel: AutomationPanel) -> str:
     return json.dumps(
         {
+            "data_saver_enabled": panel.data_saver_enabled,
             "tesla_vehicle_connected": panel.tesla_vehicle_connected,
             "tesla_charge_vehicle_count": panel.tesla_charge_vehicle_count,
             "stop_charging_required": panel.stop_charging_required,
@@ -394,6 +408,7 @@ def build_automation_panel(data: DashboardData) -> AutomationPanel:
 
     return AutomationPanel(
         global_enabled=state.global_enabled,
+        data_saver_enabled=state.data_saver_enabled,
         rules=rules,
         manual_charge=manual,
         tesla_vehicle_connected=tesla_vehicle_connected,

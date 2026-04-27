@@ -25,10 +25,12 @@ from app.services.auth import (
 )
 from app.services.background_runner import background_sampler_loop, maybe_apply_automation, maybe_enforce_charge_stop
 from app.services.dashboard import build_dashboard_data
+from app.providers.tesla import invalidate_tesla_snapshot_cache
 from app.services.tesla_commands import apply_manual_charge_request
 from app.services.tesla_partner import build_partner_status, register_partner_domain
 from app.services.tesla_keys import WELL_KNOWN_TESLA_PUBLIC_KEY_PATH, ensure_tesla_keypair, get_public_key_path
-from app.services.automation_state import GlobalAutomationPayload, ManualChargePayload, RuleTogglePayload, mark_automation_applied, update_global_automation, update_manual_charge, update_manual_charge_result, update_rule
+from app.services.automation_state import DataSaverPayload, GlobalAutomationPayload, ManualChargePayload, RuleTogglePayload, mark_automation_applied, update_data_saver, update_global_automation, update_manual_charge, update_manual_charge_result, update_rule
+from app.services.teslamate import get_teslamate_dashboards_url, teslamate_dashboards_enabled
 from app.services.tesla_oauth import (
     TeslaOAuthError,
     build_authorize_url,
@@ -250,6 +252,7 @@ async def dashboard_page(request: Request, settings: Settings = Depends(get_sett
             "app_authenticated": True,
             "tesla_pairing_url": build_pairing_url(settings),
             "tesla_public_key_url": get_public_key_url(settings),
+            "teslamate_dashboards_enabled": teslamate_dashboards_enabled(settings),
         },
     )
 
@@ -285,6 +288,17 @@ async def automation_global_toggle(request: Request, payload: GlobalAutomationPa
     return {"ok": True, "tesla": command_result}
 
 
+@app.post("/api/automation/data-saver")
+async def automation_data_saver_toggle(request: Request, payload: DataSaverPayload, settings: Settings = Depends(get_settings)):
+    require_authenticated_request(request, settings)
+    update_data_saver(payload.enabled)
+    data = await build_dashboard_data(settings)
+    command_result = await _maybe_apply_automation(settings, data.automation_panel)
+    if command_result is None:
+        command_result = await _maybe_enforce_charge_stop(settings, data)
+    return {"ok": True, "tesla": command_result}
+
+
 @app.post("/api/automation/manual-charge")
 async def automation_manual_charge(request: Request, payload: ManualChargePayload, settings: Settings = Depends(get_settings)):
     require_authenticated_request(request, settings)
@@ -295,6 +309,26 @@ async def automation_manual_charge(request: Request, payload: ManualChargePayloa
     data = await build_dashboard_data(settings)
     mark_automation_applied(data.automation_panel)
     return {"ok": True, "tesla": command_result}
+
+
+@app.get("/teslamate", response_class=HTMLResponse)
+async def teslamate_dashboards_page(request: Request, settings: Settings = Depends(get_settings)) -> HTMLResponse:
+    require_authenticated_request(request, settings)
+    return templates.TemplateResponse(
+        request,
+        "teslamate.html",
+        {
+            "request": request,
+            "settings": settings,
+            "asset_version": ASSET_VERSION,
+            "app_authenticated": True,
+            "tesla_oauth_enabled": is_tesla_oauth_configured(settings),
+            "tesla_connected": bool(settings.tesla_access_token or load_saved_tokens(settings)),
+            "tesla_pairing_url": build_pairing_url(settings),
+            "teslamate_dashboards_enabled": teslamate_dashboards_enabled(settings),
+            "teslamate_dashboards_url": get_teslamate_dashboards_url(settings),
+        },
+    )
 
 
 @app.get("/auth/tesla/login")

@@ -41,6 +41,7 @@
               {% if tesla_pairing_url %}
               <a class="header-menu-link" href="/auth/tesla/pair"><span class="header-menu-icon" aria-hidden="true">⌁</span><span class="header-menu-label">Pair Tesla Key</span></a>
               {% endif %}
+              <a class="header-menu-link" href="/teslamate"><span class="header-menu-icon" aria-hidden="true">▣</span><span class="header-menu-label">TeslaMate Dashboards</span></a>
               <a class="header-menu-link" href="/admin/tesla-partner"><span class="header-menu-icon" aria-hidden="true">⚙</span><span class="header-menu-label">Tesla Setup</span></a>
               {% if app_authenticated %}
               <a class="header-menu-link" href="/logout"><span class="header-menu-icon" aria-hidden="true">⎋</span><span class="header-menu-label">Log out</span></a>
@@ -62,6 +63,7 @@
             <div class="control-tile-actions">
               <button class="icon-button" id="automation-toggle" type="button" aria-expanded="false">Auto</button>
               <button class="icon-button icon-button-stop" id="stop-charging-button" type="button">Stop charging</button>
+              <button class="icon-button" id="data-saver-button" type="button" aria-pressed="false">Data-saver off</button>
             </div>
             <label class="switch">
               <input id="automation-global-enabled" type="checkbox" />

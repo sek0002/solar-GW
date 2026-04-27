@@ -1,0 +1,16 @@
+[Unit]
+Description=Zigbee2MQTT
+After=network.target mosquitto.service
+Wants=network.target
+
+[Service]
+Environment=NODE_ENV=production
+WorkingDirectory=/opt/zigbee2mqtt
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+User=zigbee2mqtt
+Group=zigbee2mqtt
+
+[Install]
+WantedBy=multi-user.target

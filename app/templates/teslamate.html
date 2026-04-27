@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ settings.dashboard_title }} • TeslaMate</title>
+    <meta name="theme-color" content="#07111a" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css?v={{ asset_version }}" />
+  </head>
+  <body data-refresh="{{ settings.refresh_interval_seconds }}">
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">TeslaMate</p>
+          <h1>Dashboards</h1>
+        </div>
+        <div class="topbar-side">
+          <div class="header-menu" id="header-menu">
+            <button class="auth-link" id="header-menu-toggle" type="button" aria-haspopup="menu" aria-expanded="false">
+              <span class="header-menu-trigger-label">Menu</span>
+            </button>
+            <nav class="header-menu-list" id="header-menu-list" aria-label="Header actions" hidden>
+              <a class="header-menu-link" href="/"><span class="header-menu-icon" aria-hidden="true">⌂</span><span class="header-menu-label">Back to Dashboard</span></a>
+              {% if tesla_oauth_enabled %}
+              <a class="header-menu-link" href="{% if tesla_connected %}/auth/tesla/logout{% else %}/auth/tesla/login{% endif %}">
+                <span class="header-menu-icon" aria-hidden="true">{% if tesla_connected %}↻{% else %}↗{% endif %}</span>
+                <span class="header-menu-label">{% if tesla_connected %}Disconnect Tesla{% else %}Connect Tesla{% endif %}</span>
+              </a>
+              {% endif %}
+              {% if tesla_pairing_url %}
+              <a class="header-menu-link" href="/auth/tesla/pair"><span class="header-menu-icon" aria-hidden="true">⌁</span><span class="header-menu-label">Pair Tesla Key</span></a>
+              {% endif %}
+              <a class="header-menu-link" href="/admin/tesla-partner"><span class="header-menu-icon" aria-hidden="true">⚙</span><span class="header-menu-label">Tesla Setup</span></a>
+              {% if app_authenticated %}
+              <a class="header-menu-link" href="/logout"><span class="header-menu-icon" aria-hidden="true">⎋</span><span class="header-menu-label">Log out</span></a>
+              {% endif %}
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      <main class="grid teslamate-page-grid">
+        <section class="panel panel-full teslamate-panel">
+          <div class="section-head teslamate-section-head">
+            <div>
+              <p class="eyebrow">Embedded View</p>
+              <h3>TeslaMate dashboard browser</h3>
+            </div>
+            {% if teslamate_dashboards_url %}
+            <a class="auth-link" href="{{ teslamate_dashboards_url }}" target="_blank" rel="noreferrer">Open TeslaMate</a>
+            {% endif %}
+          </div>
+
+          {% if teslamate_dashboards_enabled and teslamate_dashboards_url %}
+          <p class="teslamate-copy">
+            This page embeds the TeslaMate dashboards index. If Grafana blocks embedding, use the open button above.
+          </p>
+          <div class="teslamate-frame-shell">
+            <iframe
+              class="teslamate-frame"
+              src="{{ teslamate_dashboards_url }}"
+              title="TeslaMate dashboards"
+              loading="lazy"
+              referrerpolicy="strict-origin-when-cross-origin"
+            ></iframe>
+          </div>
+          {% else %}
+          <div class="teslamate-empty">
+            <strong>TeslaMate dashboards are not configured yet.</strong>
+            <p>
+              Set <code>TESLAMATE_DASHBOARDS_URL</code> directly, or set <code>TESLAMATE_GRAFANA_URL</code> and the app will use its <code>/dashboards</code> page here.
+            </p>
+          </div>
+          {% endif %}
+        </section>
+      </main>
+    </div>
+
+    <script src="/assets/app.js?v={{ asset_version }}"></script>
+  </body>
+</html>

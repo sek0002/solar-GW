@@ -7,7 +7,7 @@ import httpx
 
 from app.config import Settings, parse_csv
 from app.models import AutomationPanel
-from app.services.automation_state import clamp_amps
+from app.services.automation_state import clamp_amps, load_persisted_state
 from app.services.tesla_oauth import get_valid_access_token
 
 MIN_VEHICLE_AMPS = 5
@@ -80,6 +80,8 @@ async def _discover_controllable_vehicles(
     vins: list[str],
     token: str,
     notes: list[str],
+    *,
+    allow_wake: bool,
 ) -> list[dict[str, str]]:
     controllable: list[dict[str, str]] = []
     for vin in vins:
@@ -94,6 +96,9 @@ async def _discover_controllable_vehicles(
         vehicle_state_name = str(meta.get("state", "unknown")).lower()
 
         if vehicle_state_name in {"asleep", "offline"}:
+            if not allow_wake:
+                notes.append(f"Data-saver skipped wake-up for {vehicle_name} while it was {vehicle_state_name}.")
+                continue
             notes.append(f"Waking {vehicle_name} from {vehicle_state_name}.")
             try:
                 await _post_command(
@@ -170,16 +175,28 @@ async def _apply_charge_target(settings: Settings, target_amps: int | None, deta
 
     timeout = httpx.Timeout(settings.request_timeout_seconds, connect=settings.request_timeout_seconds)
     notes: list[str] = []
+    allow_wake = not load_persisted_state().data_saver_enabled
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        controllable = await _discover_controllable_vehicles(client, settings, vins, token, notes)
+        controllable = await _discover_controllable_vehicles(
+            client,
+            settings,
+            vins,
+            token,
+            notes,
+            allow_wake=allow_wake,
+        )
 
         if not controllable:
             return {
                 "applied": False,
                 "status": "idle" if requested_amps is None else "error",
                 "target_amps": requested_amps,
-                "detail": "No plugged-in Tesla vehicles were available for charge control.",
+                "detail": (
+                    "No plugged-in Tesla vehicles were available for charge control."
+                    if allow_wake
+                    else "No online plugged-in Tesla vehicles were available for charge control while Data-saver is on."
+                ),
                 "notes": notes,
             }
 

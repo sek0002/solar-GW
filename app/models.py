@@ -111,6 +111,7 @@ class ManualChargeControl(BaseModel):
 
 class AutomationPanel(BaseModel):
     global_enabled: bool = True
+    data_saver_enabled: bool = False
     rules: list[AutomationRule] = Field(default_factory=list)
     manual_charge: ManualChargeControl = Field(default_factory=ManualChargeControl)
     tesla_vehicle_connected: bool = False

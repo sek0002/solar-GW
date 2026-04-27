@@ -385,6 +385,12 @@ h3 {
   flex: 0 0 auto;
 }
 
+.icon-button-active {
+  border-color: rgba(97, 230, 255, 0.32);
+  background: rgba(97, 230, 255, 0.12);
+  color: #d9fbff;
+}
+
 .icon-button-stop {
   border-color: rgba(255, 144, 122, 0.28);
   background: rgba(255, 144, 122, 0.08);
@@ -877,6 +883,53 @@ h3 {
 .provider-pill.disconnected::before {
   background: var(--danger);
   color: var(--danger);
+}
+
+.teslamate-page-grid {
+  grid-template-columns: 1fr;
+}
+
+.teslamate-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.teslamate-section-head {
+  gap: 12px;
+}
+
+.teslamate-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.teslamate-frame-shell {
+  min-height: 72vh;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.teslamate-frame {
+  display: block;
+  width: 100%;
+  min-height: 72vh;
+  border: 0;
+  background: #0a1722;
+}
+
+.teslamate-empty {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.teslamate-empty p {
+  margin-bottom: 0;
 }
 
 .section-head {

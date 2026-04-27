@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     wall_connector_location: str = "Garage"
     wall_connector_max_kw: float = 11.0
     wall_connector_circuit_amps: int = 32
+    teslamate_postgres_dsn: str | None = None
+    teslamate_grafana_url: str | None = None
+    teslamate_dashboards_url: str | None = None
 
     growatt_overview_url: str | None = None
     growatt_battery_url: str | None = None

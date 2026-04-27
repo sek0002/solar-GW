@@ -182,3 +182,19 @@ WEB_BACKGROUND_SAMPLER_ENABLED=false
 ```
 
 Set `BACKGROUND_HISTORY_INTERVAL_SECONDS=0` or disable the service if you do not want the standalone worker running.
+
+## Data-saver and TeslaMate
+
+The dashboard now includes a `Data-saver` pill beside `Stop charging`.
+
+- When `Data-saver` is on, the app will not send Tesla wake-up commands before attempting charge control.
+- Live Tesla reads keep using the low-drain pattern already used in the app and in TeslaMate: fetch vehicle metadata first, and only request `vehicle_data` when the car is already online.
+
+To merge TeslaMate SoC and charge history into the Tesla vehicle chart, configure:
+
+- `TESLAMATE_POSTGRES_DSN`
+
+To open TeslaMate dashboards from the app menu and the dedicated `/teslamate` page, configure either:
+
+- `TESLAMATE_DASHBOARDS_URL`
+- or `TESLAMATE_GRAFANA_URL` so the app can use its `/dashboards` page

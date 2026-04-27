@@ -853,6 +853,17 @@ async function submitManualCharge(enabled, targetAmps) {
   return response.json().catch(() => null);
 }
 
+async function submitDataSaver(enabled) {
+  const response = await fetch("/api/automation/data-saver", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      enabled: Boolean(enabled),
+    }),
+  });
+  return response.json().catch(() => null);
+}
+
 function renderAutomationPanel(panel) {
   const toggle = document.getElementById("automation-toggle");
   const chargeToggle = document.getElementById("charge-toggle");
@@ -865,7 +876,14 @@ function renderAutomationPanel(panel) {
   }
   root.hidden = !automationPanelOpen;
   const globalToggle = document.getElementById("automation-global-enabled");
+  const dataSaverButton = document.getElementById("data-saver-button");
   globalToggle.checked = Boolean(panel.global_enabled);
+  if (dataSaverButton) {
+    const dataSaverEnabled = Boolean(panel.data_saver_enabled);
+    dataSaverButton.textContent = dataSaverEnabled ? "Data-saver on" : "Data-saver off";
+    dataSaverButton.setAttribute("aria-pressed", dataSaverEnabled ? "true" : "false");
+    dataSaverButton.classList.toggle("icon-button-active", dataSaverEnabled);
+  }
 
   document.getElementById("automation-mode").textContent = panel.effective_mode || "Idle";
   document.getElementById("automation-detail").textContent = panel.effective_detail || "Automation waiting for an active rule.";
@@ -996,6 +1014,19 @@ function renderAutomationPanel(panel) {
         document.getElementById("manual-charge-detail").textContent = payload.tesla.detail;
       }
       await refreshDashboard();
+    };
+  }
+
+  if (dataSaverButton) {
+    dataSaverButton.onclick = async () => {
+      dataSaverButton.disabled = true;
+      const enableDataSaver = dataSaverButton.getAttribute("aria-pressed") !== "true";
+      const payload = await submitDataSaver(enableDataSaver);
+      if (payload?.tesla?.detail) {
+        document.getElementById("manual-charge-detail").textContent = payload.tesla.detail;
+      }
+      await refreshDashboard();
+      dataSaverButton.disabled = false;
     };
   }
 }
@@ -1429,11 +1460,14 @@ async function refreshDashboard() {
 }
 
 setupHeaderMenu();
-loadChartHistoryCache();
-loadTeslaVehicleCache();
-try {
-  renderDashboard(initialData);
-} catch (error) {
-  console.error("Initial dashboard render failed", error);
+const isDashboardPage = Boolean(document.getElementById("automation-panel"));
+if (isDashboardPage) {
+  loadChartHistoryCache();
+  loadTeslaVehicleCache();
+  try {
+    renderDashboard(initialData);
+  } catch (error) {
+    console.error("Initial dashboard render failed", error);
+  }
+  window.setInterval(refreshDashboard, refreshSeconds * 1000);
 }
-window.setInterval(refreshDashboard, refreshSeconds * 1000);

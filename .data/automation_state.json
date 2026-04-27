@@ -12,10 +12,17 @@
     },
     "night_trickle": {
       "enabled": true
+    },
+    "plug_in_hold": {
+      "enabled": true
     }
   },
   "manual_charge": {
     "enabled": false,
-    "target_amps": 7
+    "target_amps": 7,
+    "status": "idle",
+    "detail": null,
+    "notes": [],
+    "updated_at": null
   }
 }
