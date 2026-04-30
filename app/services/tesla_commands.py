@@ -9,6 +9,7 @@ from app.config import Settings, parse_csv
 from app.models import AutomationPanel
 from app.services.automation_state import clamp_amps, load_persisted_state
 from app.services.tesla_oauth import get_valid_access_token
+from app.services.teslamate import load_teslamate_dashboard_cards
 
 MIN_VEHICLE_AMPS = 5
 MAX_VEHICLE_AMPS = 30
@@ -84,6 +85,32 @@ async def _discover_controllable_vehicles(
     allow_wake: bool,
 ) -> list[dict[str, str]]:
     controllable: list[dict[str, str]] = []
+    if not allow_wake:
+        teslamate_cards, teslamate_notes = load_teslamate_dashboard_cards(settings)
+        notes.extend(teslamate_notes)
+        cards_by_vin = {
+            card.vin: card
+            for card in teslamate_cards
+            if card.vin
+        }
+        for vin in vins:
+            card = cards_by_vin.get(vin)
+            vehicle_name = (card.name if card else None) or vin[-6:]
+            if not card:
+                notes.append(f"Data-saver skipped Tesla lookup for {vehicle_name}; no TeslaMate state was available.")
+                continue
+            status_name = str(card.status or "unknown").lower()
+            if card.plugged_in is True or (card.charger_power_kw or 0) > 0 or status_name in {"charging", "complete", "stopped"}:
+                controllable.append(
+                    {
+                        "vin": vin,
+                        "name": vehicle_name,
+                    }
+                )
+                continue
+            notes.append(f"{vehicle_name} is not marked plugged in by TeslaMate while Data-saver is on.")
+        return controllable
+
     for vin in vins:
         try:
             meta_payload = await _get_json(client, f"{settings.tesla_api_base_url}/api/1/vehicles/{vin}", token)

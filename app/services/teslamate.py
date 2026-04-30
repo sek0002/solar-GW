@@ -369,6 +369,7 @@ def load_teslamate_dashboard_cards(
                     cards.append(
                         TeslaMateCard(
                             name=display_name,
+                            vin=vin,
                             model=model,
                             trim_badging=trim_badging,
                             marketing_name=marketing_name,

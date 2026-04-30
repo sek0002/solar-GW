@@ -90,6 +90,7 @@ class EnergyChartSeries(BaseModel):
 
 class TeslaMateCard(BaseModel):
     name: str
+    vin: str | None = None
     model: str | None = None
     trim_badging: str | None = None
     marketing_name: str | None = None
