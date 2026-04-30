@@ -8,6 +8,7 @@ import httpx
 
 from app.config import Settings, parse_csv
 from app.providers.base import ProviderSnapshot
+from app.services.automation_state import load_persisted_state
 from app.services.tesla_oauth import build_pairing_url, get_public_key_url, get_valid_access_token
 
 TESLA_SNAPSHOT_TTL = timedelta(minutes=5)
@@ -61,6 +62,13 @@ def _get_cached_snapshot(cache_key: str) -> ProviderSnapshot | None:
     return copy.deepcopy(snapshot)
 
 
+def _get_last_cached_snapshot() -> ProviderSnapshot | None:
+    snapshot = _TESLA_SNAPSHOT_CACHE.get("snapshot")
+    if snapshot is None:
+        return None
+    return copy.deepcopy(snapshot)
+
+
 def _store_cached_snapshot(cache_key: str, snapshot: ProviderSnapshot) -> None:
     _TESLA_SNAPSHOT_CACHE["cache_key"] = cache_key
     _TESLA_SNAPSHOT_CACHE["captured_at"] = datetime.now(timezone.utc)
@@ -75,8 +83,44 @@ def invalidate_tesla_snapshot_cache() -> None:
 
 async def load_tesla_vehicle_snapshot(client: httpx.AsyncClient, settings: Settings) -> ProviderSnapshot | None:
     vins = parse_csv(settings.tesla_vehicle_vins)
+    if not vins:
+        return None
+    if load_persisted_state().data_saver_enabled:
+        cached_snapshot = _get_last_cached_snapshot()
+        if cached_snapshot is not None:
+            cached_snapshot.status = "degraded"
+            cached_snapshot.detail = "Data-saver is on, so Tesla live vehicle reads are paused and the dashboard is showing the last cached Tesla state."
+            cached_snapshot.notes = [
+                "Data-saver is on: Tesla live reads and wake-up calls are disabled.",
+                *cached_snapshot.notes,
+            ]
+            return cached_snapshot
+        return ProviderSnapshot(
+            name="Tesla Charging",
+            kind="hybrid",
+            status="degraded",
+            detail="Data-saver is on, so Tesla live vehicle reads are paused.",
+            chargers=[
+                {
+                    "name": settings.wall_connector_name,
+                    "source": "Tesla Charging",
+                    "status": "Unknown",
+                    "active_sessions": 0,
+                    "connected_vehicles": 0,
+                    "power_kw": 0.0,
+                    "max_power_kw": settings.wall_connector_max_kw,
+                    "circuit_amps": settings.wall_connector_circuit_amps,
+                    "location": settings.wall_connector_location,
+                    "vehicle_names": [],
+                }
+            ],
+            notes=[
+                "Data-saver is on: Tesla live reads and wake-up calls are disabled.",
+                "TeslaMate history will still appear in charts if TESLAMATE_POSTGRES_DSN is configured.",
+            ],
+        )
     token = await get_valid_access_token(settings)
-    if not token or not vins:
+    if not token:
         return None
     cache_key = _build_cache_key(settings, vins, token)
     cached_snapshot = _get_cached_snapshot(cache_key)
