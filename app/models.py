@@ -88,6 +88,30 @@ class EnergyChartSeries(BaseModel):
     points: list[EnergyChartPoint] = Field(default_factory=list)
 
 
+class TeslaMateCard(BaseModel):
+    name: str
+    model: str | None = None
+    trim_badging: str | None = None
+    marketing_name: str | None = None
+    status: str | None = None
+    status_duration: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    battery_level: float | None = None
+    usable_battery_level: float | None = None
+    rated_range_km: float | None = None
+    est_range_km: float | None = None
+    outside_temp_c: float | None = None
+    inside_temp_c: float | None = None
+    odometer_km: float | None = None
+    version: str | None = None
+    plugged_in: bool | None = None
+    charger_power_kw: float | None = None
+    updated_at: datetime | None = None
+    maps_url: str | None = None
+    map_embed_url: str | None = None
+
+
 class AutomationRule(BaseModel):
     id: str
     label: str
@@ -135,5 +159,6 @@ class DashboardData(BaseModel):
     chargers: list[ChargerStatus] = Field(default_factory=list)
     plants: list[PlantStatus] = Field(default_factory=list)
     vehicles: list[VehicleStatus] = Field(default_factory=list)
+    teslamate_cards: list[TeslaMateCard] = Field(default_factory=list)
     sources: list[SourceStatus] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)

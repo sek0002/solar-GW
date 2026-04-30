@@ -7,14 +7,14 @@ from datetime import datetime, timedelta, timezone
 import httpx
 
 from app.config import Settings, parse_csv
-from app.models import BatteryStatus, ChargerStatus, DashboardData, EnergyChartSeries, PlantStatus, PowerFlow, SourceStatus, SummaryMetric, VehicleStatus
+from app.models import BatteryStatus, ChargerStatus, DashboardData, EnergyChartSeries, PlantStatus, PowerFlow, SourceStatus, SummaryMetric, TeslaMateCard, VehicleStatus
 from app.providers.goodwe import load_goodwe_snapshot
 from app.providers.growatt import load_growatt_snapshot
 from app.providers.generic_vendor import load_vendor_snapshot
 from app.providers.tesla import load_tesla_vehicle_snapshot
 from app.services.chart_history import load_chart_history, store_chart_history
 from app.services.automation_state import build_automation_panel
-from app.services.teslamate import load_teslamate_chart_history
+from app.services.teslamate import load_teslamate_chart_history, load_teslamate_dashboard_cards
 
 NON_TESLA_SNAPSHOT_TTL = timedelta(minutes=1)
 _NON_TESLA_SNAPSHOT_CACHE: dict[str, object | None] = {
@@ -276,6 +276,7 @@ async def build_dashboard_data(settings: Settings) -> DashboardData:
     live_energy_chart = list(energy_chart)
     persisted_energy_chart: list[EnergyChartSeries] = []
     teslamate_series: list[EnergyChartSeries] = []
+    teslamate_cards: list[TeslaMateCard] = []
     try:
         store_chart_history(settings, live_energy_chart)
         persisted_energy_chart = load_chart_history(settings)
@@ -292,6 +293,11 @@ async def build_dashboard_data(settings: Settings) -> DashboardData:
         preferred_vehicle_names=preferred_vehicle_names,
     )
     notes.extend(teslamate_notes)
+    teslamate_cards, teslamate_card_notes = load_teslamate_dashboard_cards(
+        settings,
+        preferred_vehicle_names=preferred_vehicle_names,
+    )
+    notes.extend(teslamate_card_notes)
     vehicles = _merge_teslamate_vehicle_fallbacks(vehicles, teslamate_series)
 
     dashboard = DashboardData(
@@ -304,6 +310,7 @@ async def build_dashboard_data(settings: Settings) -> DashboardData:
         chargers=chargers,
         plants=plants,
         vehicles=vehicles,
+        teslamate_cards=teslamate_cards,
         sources=sources,
         notes=notes,
     )

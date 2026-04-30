@@ -135,6 +135,13 @@ function getTeslaVehicleSeriesColor(vehicleKey) {
   return TESLA_VEHICLE_COLORS[hash % TESLA_VEHICLE_COLORS.length];
 }
 
+function getTeslaVehicleSeriesKey(vehicleKey, suffix) {
+  return `vehicle_${String(vehicleKey || "tesla")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "")}_${suffix}`;
+}
+
 function loadTeslaVehicleCache() {
   try {
     const raw = window.localStorage.getItem(TESLA_VEHICLE_STORAGE_KEY);
@@ -385,8 +392,8 @@ function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
     .forEach((vehicle) => {
       const vehicleKey = vehicle.name || vehicle.vin || "tesla";
       const vehicleColor = getTeslaVehicleSeriesColor(vehicleKey);
-      const socKey = `vehicle_${String(vehicleKey).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}_soc_pct`;
-      const chargeKey = `vehicle_${String(vehicleKey).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}_charge_kw`;
+      const socKey = getTeslaVehicleSeriesKey(vehicleKey, "soc_pct");
+      const chargeKey = getTeslaVehicleSeriesKey(vehicleKey, "charge_kw");
       if (vehicle.battery_level !== null && vehicle.battery_level !== undefined) {
         appendChartPointWithCarryForward(
           socKey,
@@ -453,14 +460,16 @@ function getChargeSpeedMarkup({ amps = null, kw = null, label = "Live", accent =
 
 function getVehicleStatusMetricMarkup(vehicle) {
   const parts = [];
-  if (Number.isFinite(vehicle?.battery_level)) {
-    parts.push(formatInlineMetric(Number(vehicle.battery_level), "%", 0));
+  const soc = vehicle?.battery_level ?? getLatestTeslaVehicleSoc(vehicle);
+  const chargeKw = getLatestTeslaVehicleChargeKw(vehicle);
+  if (Number.isFinite(soc)) {
+    parts.push(formatInlineMetric(Number(soc), "%", 0));
   }
   if (Number.isFinite(vehicle?.charge_current_a) && Number(vehicle.charge_current_a) > 0) {
     parts.push(formatInlineMetric(Number(vehicle.charge_current_a), "A", Number(vehicle.charge_current_a) < 10 ? 1 : 0));
   }
-  if (Number.isFinite(vehicle?.charge_power_kw) && Number(vehicle.charge_power_kw) > 0) {
-    parts.push(formatInlineMetric(Number(vehicle.charge_power_kw), "kW", Number(vehicle.charge_power_kw) < 10 ? 1 : 0));
+  if (Number.isFinite(chargeKw) && Number(chargeKw) > 0) {
+    parts.push(formatInlineMetric(Number(chargeKw), "kW", Number(chargeKw) < 10 ? 1 : 0));
   }
   if (!parts.length) return "";
   return `<span class="status-metric status-metric-accent status-metric-plain" title="${vehicle?.name || "Vehicle"} state">${parts.join(" · ")}</span>`;
@@ -494,6 +503,32 @@ function getLatestSeriesValue(seriesKey) {
   return Number.isFinite(latestValue) ? Number(latestValue) : 0;
 }
 
+function getLatestTeslaVehicleSoc(vehicle) {
+  const vehicleKey = vehicle?.name || vehicle?.vin || "tesla";
+  const seriesValue = getLatestSeriesValue(getTeslaVehicleSeriesKey(vehicleKey, "soc_pct"));
+  if (Number.isFinite(seriesValue) && seriesValue > 0) {
+    return seriesValue;
+  }
+  const cacheKey = getVehicleCacheKey(vehicle);
+  const cachedLevel = lastKnownVehicleBatteryLevels.get(cacheKey);
+  if (Number.isFinite(cachedLevel)) {
+    return Number(cachedLevel);
+  }
+  return null;
+}
+
+function getLatestTeslaVehicleChargeKw(vehicle) {
+  const vehicleKey = vehicle?.name || vehicle?.vin || "tesla";
+  const seriesValue = getLatestSeriesValue(getTeslaVehicleSeriesKey(vehicleKey, "charge_kw"));
+  if (Number.isFinite(seriesValue) && seriesValue >= 0) {
+    return seriesValue;
+  }
+  if (Number.isFinite(vehicle?.charge_power_kw)) {
+    return Number(vehicle.charge_power_kw);
+  }
+  return null;
+}
+
 function renderBatteryRail(vehicles, batteries, powerFlow) {
   const root = document.getElementById("battery-rail");
   if (!root) return;
@@ -507,7 +542,7 @@ function renderBatteryRail(vehicles, batteries, powerFlow) {
         const level =
           vehicle.battery_level !== null && vehicle.battery_level !== undefined
             ? Number(vehicle.battery_level)
-            : lastKnownVehicleBatteryLevels.get(cacheKey);
+            : getLatestTeslaVehicleSoc(vehicle);
         if (level === null || level === undefined) return null;
         const disconnected = String(vehicle.charging_state || "").toLowerCase() === "disconnected";
         return {
@@ -708,6 +743,106 @@ function renderVehicles(vehicles) {
             <span>Range: ${formatValue(vehicle.range_km, "km")}</span>
             <span>Plugged in: ${vehicle.plugged_in ? "Yes" : "No"}</span>
             <span>Location: ${vehicle.location || "Unknown"}</span>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function formatTeslaMateStatus(card) {
+  if (!card?.status) return "Unknown";
+  const state = String(card.status).toLowerCase();
+  const prettyState =
+    state === "online"
+      ? "online"
+      : state === "offline"
+        ? "offline"
+        : state === "asleep"
+          ? "asleep"
+          : state === "charging"
+            ? "charging"
+            : state;
+  return card.status_duration ? `${prettyState} for ${card.status_duration}` : prettyState;
+}
+
+function formatTeslaMateModel(card) {
+  const parts = [];
+  if (card?.model) {
+    parts.push(`Model ${card.model}`);
+  }
+  if (card?.marketing_name) {
+    parts.push(card.marketing_name);
+  } else if (card?.trim_badging) {
+    parts.push(card.trim_badging);
+  }
+  return parts.join(" ");
+}
+
+function renderTeslaMateCards(cards) {
+  const root = document.getElementById("teslamate-cards");
+  if (!root) return;
+  if (!Array.isArray(cards) || !cards.length) {
+    root.innerHTML = `
+      <article class="teslamate-summary-empty">
+        <strong>TeslaMate summary is not available yet.</strong>
+        <p>Configure <code>TESLAMATE_POSTGRES_DSN</code> to show TeslaMate vehicle summary cards here.</p>
+      </article>
+    `;
+    return;
+  }
+
+  root.innerHTML = cards
+    .map((card) => {
+      const iconMarkup = [
+        card.plugged_in ? `<span class="teslamate-summary-icon" title="Plugged in">⌁</span>` : "",
+        card.maps_url ? `<a class="teslamate-summary-icon teslamate-summary-link" href="${card.maps_url}" target="_blank" rel="noreferrer" title="Open in maps">⌖</a>` : "",
+        card.version ? `<a class="teslamate-summary-icon teslamate-summary-link" href="https://www.notateslaapp.com/software-updates/version/${card.version}/release-notes" target="_blank" rel="noreferrer" title="Release notes">⬒</a>` : "",
+      ]
+        .filter(Boolean)
+        .join("");
+
+      const rows = [
+        ["Status", formatTeslaMateStatus(card)],
+        ["Range (rated)", formatValue(card.rated_range_km, "km")],
+        ["Range (est.)", formatValue(card.est_range_km, "km")],
+        ["State of Charge", formatValue(card.usable_battery_level ?? card.battery_level, "%")],
+        ["Outside Temperature", formatValue(card.outside_temp_c, "°C")],
+        ["Inside Temperature", formatValue(card.inside_temp_c, "°C")],
+        ["Mileage", formatValue(card.odometer_km, "km")],
+        ["Version", card.version || "N/A"],
+      ]
+        .filter(([, value]) => value && value !== "N/A")
+        .map(
+          ([label, value]) => `
+            <tr>
+              <td class="teslamate-summary-label">${label}</td>
+              <td class="teslamate-summary-value">${value}</td>
+            </tr>
+          `,
+        )
+        .join("");
+
+      const mapMarkup = card.map_embed_url
+        ? `<iframe class="teslamate-summary-map-frame" src="${card.map_embed_url}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="${card.name} map"></iframe>`
+        : `<div class="teslamate-summary-map-fallback"><strong>${card.name}</strong><span>Location unavailable</span></div>`;
+
+      return `
+        <article class="teslamate-summary-card">
+          <div class="teslamate-summary-map-shell">
+            ${mapMarkup}
+          </div>
+          <div class="teslamate-summary-content">
+            <div class="teslamate-summary-head">
+              <div>
+                <h4>${card.name}</h4>
+                <p>${formatTeslaMateModel(card) || "Tesla vehicle"}</p>
+              </div>
+              <div class="teslamate-summary-icons">${iconMarkup}</div>
+            </div>
+            <table class="teslamate-summary-table">
+              <tbody>${rows}</tbody>
+            </table>
           </div>
         </article>
       `;
@@ -1403,6 +1538,7 @@ function renderDashboard(data) {
   renderBatteries(data.batteries || []);
   renderPlants(data.plants || []);
   renderVehicles(displayVehicles);
+  renderTeslaMateCards(data.teslamate_cards || []);
   renderBatteryRail(displayVehicles, data.batteries || [], data.power_flow || {});
   renderSources(data.sources || [], displayVehicles, data.chargers || [], data.power_flow || {});
   renderUpdatedAt(data.updated_at);

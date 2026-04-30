@@ -932,6 +932,132 @@ h3 {
   margin-bottom: 0;
 }
 
+.teslamate-summary-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.teslamate-summary-card {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgba(136, 161, 176, 0.18);
+  border-radius: 22px;
+  background: rgba(18, 22, 30, 0.96);
+}
+
+.teslamate-summary-map-shell {
+  min-height: 220px;
+  background: #11141c;
+}
+
+.teslamate-summary-map-frame {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  border: 0;
+  filter: grayscale(1) brightness(0.62) contrast(1.25);
+}
+
+.teslamate-summary-map-fallback {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 220px;
+  color: rgba(222, 228, 239, 0.86);
+}
+
+.teslamate-summary-map-fallback span {
+  color: rgba(166, 174, 194, 0.74);
+}
+
+.teslamate-summary-content {
+  padding: 20px 22px 22px;
+}
+
+.teslamate-summary-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.teslamate-summary-head h4 {
+  margin: 0;
+  font-size: 1.9rem;
+  line-height: 1.05;
+}
+
+.teslamate-summary-head p {
+  margin: 4px 0 0;
+  color: rgba(189, 195, 214, 0.8);
+  font-size: 1.05rem;
+  font-weight: 400;
+}
+
+.teslamate-summary-icons {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: rgba(126, 136, 160, 0.9);
+  font-size: 1.15rem;
+}
+
+.teslamate-summary-icon {
+  color: inherit;
+  text-decoration: none;
+}
+
+.teslamate-summary-link:hover {
+  color: rgba(231, 236, 246, 0.96);
+  text-decoration: none;
+}
+
+.teslamate-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.teslamate-summary-table td {
+  padding: 4px 0;
+  border: 0;
+}
+
+.teslamate-summary-label {
+  width: 48%;
+  color: rgba(234, 238, 248, 0.92);
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.teslamate-summary-value {
+  color: rgba(214, 220, 233, 0.88);
+  font-size: 0.98rem;
+}
+
+.teslamate-summary-empty {
+  padding: 22px;
+  border: 1px dashed rgba(136, 161, 176, 0.24);
+  border-radius: 20px;
+  color: rgba(214, 220, 233, 0.86);
+}
+
+.teslamate-summary-empty p {
+  margin: 6px 0 0;
+  color: rgba(166, 174, 194, 0.74);
+}
+
+@media (min-width: 900px) {
+  .teslamate-summary-card {
+    grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.1fr);
+  }
+
+  .teslamate-summary-map-shell,
+  .teslamate-summary-map-frame {
+    min-height: 100%;
+  }
+}
+
 .section-head {
   margin-bottom: 18px;
   gap: 16px;
