@@ -277,6 +277,15 @@ def load_teslamate_dashboard_cards(
             INNER JOIN selected_cars sc ON sc.id = u.car_id
             ORDER BY u.car_id, COALESCE(u.end_date, u.start_date) DESC, u.start_date DESC
         ),
+        latest_vehicle_lock AS (
+            SELECT DISTINCT ON (p.car_id)
+                p.car_id,
+                p.date,
+                NULL::boolean AS locked
+            FROM positions p
+            INNER JOIN selected_cars sc ON sc.id = p.car_id
+            ORDER BY p.car_id, p.date DESC
+        ),
         latest_charges AS (
             SELECT DISTINCT ON (cp.car_id)
                 cp.car_id,
@@ -308,6 +317,7 @@ def load_teslamate_dashboard_cards(
             cs.state,
             cs.start_date,
             lu.version,
+            lvl.locked,
             lc.date,
             lc.charger_power,
             lc.conn_charge_cable
@@ -315,6 +325,7 @@ def load_teslamate_dashboard_cards(
         LEFT JOIN latest_positions lp ON lp.car_id = sc.id
         LEFT JOIN current_states cs ON cs.car_id = sc.id
         LEFT JOIN latest_updates lu ON lu.car_id = sc.id
+        LEFT JOIN latest_vehicle_lock lvl ON lvl.car_id = sc.id
         LEFT JOIN latest_charges lc ON lc.car_id = sc.id
         ORDER BY sc.display_priority NULLS LAST, sc.id
     """
@@ -344,6 +355,7 @@ def load_teslamate_dashboard_cards(
                     state,
                     state_start,
                     version,
+                    locked,
                     charge_date,
                     charger_power,
                     conn_charge_cable,
@@ -373,6 +385,7 @@ def load_teslamate_dashboard_cards(
                             odometer_km=odometer_km,
                             version=version,
                             plugged_in=plugged_in,
+                            locked=locked,
                             charger_power_kw=charger_power,
                             updated_at=updated_at,
                             maps_url=_build_maps_url(latitude, longitude),

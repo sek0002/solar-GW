@@ -106,6 +106,7 @@ class TeslaMateCard(BaseModel):
     odometer_km: float | None = None
     version: str | None = None
     plugged_in: bool | None = None
+    locked: bool | None = None
     charger_power_kw: float | None = None
     updated_at: datetime | None = None
     maps_url: str | None = None

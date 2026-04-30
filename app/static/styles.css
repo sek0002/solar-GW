@@ -955,7 +955,34 @@ h3 {
   width: 100%;
   min-height: 220px;
   border: 0;
+  background: #10131a;
+}
+
+.teslamate-summary-map-frame .leaflet-tile-pane,
+.teslamate-summary-map-frame .leaflet-control-zoom-in,
+.teslamate-summary-map-frame .leaflet-control-zoom-out,
+.teslamate-summary-map-frame .leaflet-control-attribution {
   filter: grayscale(1) brightness(0.62) contrast(1.25);
+}
+
+.teslamate-summary-map-frame .leaflet-container {
+  background: #10131a;
+}
+
+.teslamate-summary-map-frame .leaflet-control-zoom a {
+  background: rgba(255, 255, 255, 0.9);
+  color: #0a0f16;
+  border: 0;
+}
+
+.teslamate-summary-map-frame .leaflet-control-attribution {
+  background: rgba(10, 15, 22, 0.6);
+  color: rgba(220, 225, 236, 0.76);
+  font-size: 0.62rem;
+}
+
+.teslamate-summary-map-frame .leaflet-control-attribution a {
+  color: inherit;
 }
 
 .teslamate-summary-map-fallback {
@@ -1005,11 +1032,25 @@ h3 {
 .teslamate-summary-icon {
   color: inherit;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  line-height: 1;
 }
 
 .teslamate-summary-link:hover {
   color: rgba(231, 236, 246, 0.96);
   text-decoration: none;
+}
+
+.teslamate-summary-icon-muted {
+  opacity: 0.58;
+}
+
+.teslamate-summary-icon-warn {
+  color: rgba(255, 164, 125, 0.95);
 }
 
 .teslamate-summary-table {

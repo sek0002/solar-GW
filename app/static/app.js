@@ -3,6 +3,7 @@ const refreshSeconds = Number(document.body.dataset.refresh || "30");
 const chartStore = new Map();
 const lastKnownVehicleBatteryLevels = new Map();
 const lastKnownTeslaVehicles = new Map();
+const teslaMateMaps = new Map();
 const MAX_STORED_POINTS = 10000;
 let energyChart = null;
 let vehicleChart = null;
@@ -782,6 +783,8 @@ function formatTeslaMateModel(card) {
 function renderTeslaMateCards(cards) {
   const root = document.getElementById("teslamate-cards");
   if (!root) return;
+  teslaMateMaps.forEach((map) => map.remove());
+  teslaMateMaps.clear();
   if (!Array.isArray(cards) || !cards.length) {
     root.innerHTML = `
       <article class="teslamate-summary-empty">
@@ -793,11 +796,19 @@ function renderTeslaMateCards(cards) {
   }
 
   root.innerHTML = cards
-    .map((card) => {
+    .map((card, index) => {
       const iconMarkup = [
-        card.plugged_in ? `<span class="teslamate-summary-icon" title="Plugged in">⌁</span>` : "",
-        card.maps_url ? `<a class="teslamate-summary-icon teslamate-summary-link" href="${card.maps_url}" target="_blank" rel="noreferrer" title="Open in maps">⌖</a>` : "",
-        card.version ? `<a class="teslamate-summary-icon teslamate-summary-link" href="https://www.notateslaapp.com/software-updates/version/${card.version}/release-notes" target="_blank" rel="noreferrer" title="Release notes">⬒</a>` : "",
+        card.plugged_in === true
+          ? `<span class="teslamate-summary-icon" title="Plugged in">🔌</span>`
+          : card.plugged_in === false
+            ? `<span class="teslamate-summary-icon teslamate-summary-icon-muted" title="Not plugged in">⌀</span>`
+            : "",
+        card.maps_url ? `<a class="teslamate-summary-icon teslamate-summary-link" href="${card.maps_url}" target="_blank" rel="noreferrer" title="Open in maps">📍</a>` : "",
+        card.locked === true
+          ? `<span class="teslamate-summary-icon" title="Locked">🔒</span>`
+          : card.locked === false
+            ? `<span class="teslamate-summary-icon teslamate-summary-icon-warn" title="Unlocked">🔓</span>`
+            : "",
       ]
         .filter(Boolean)
         .join("");
@@ -823,8 +834,9 @@ function renderTeslaMateCards(cards) {
         )
         .join("");
 
-      const mapMarkup = card.map_embed_url
-        ? `<iframe class="teslamate-summary-map-frame" src="${card.map_embed_url}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="${card.name} map"></iframe>`
+      const mapId = `teslamate-map-${index}`;
+      const mapMarkup = Number.isFinite(card.latitude) && Number.isFinite(card.longitude)
+        ? `<div class="teslamate-summary-map-frame" id="${mapId}" data-lat="${card.latitude}" data-lng="${card.longitude}" data-name="${card.name}"></div>`
         : `<div class="teslamate-summary-map-fallback"><strong>${card.name}</strong><span>Location unavailable</span></div>`;
 
       return `
@@ -848,6 +860,34 @@ function renderTeslaMateCards(cards) {
       `;
     })
     .join("");
+  initializeTeslaMateMaps();
+}
+
+function initializeTeslaMateMaps() {
+  if (!window.L) return;
+  document.querySelectorAll(".teslamate-summary-map-frame[data-lat][data-lng]").forEach((node) => {
+    const lat = Number(node.dataset.lat);
+    const lng = Number(node.dataset.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const map = window.L.map(node, {
+      zoomControl: true,
+      attributionControl: true,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      tap: false,
+      touchZoom: false,
+    });
+    window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+    map.setView([lat, lng], 17);
+    window.L.marker([lat, lng]).addTo(map);
+    teslaMateMaps.set(node.id, map);
+  });
 }
 
 function renderSources(sources, vehicles, chargers, powerFlow) {
