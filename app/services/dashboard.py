@@ -62,6 +62,58 @@ def _store_cached_non_tesla_snapshots(cache_key: str, snapshots) -> None:
     _NON_TESLA_SNAPSHOT_CACHE["snapshots"] = copy.deepcopy(snapshots)
 
 
+def _build_teslamate_vehicle_fallbacks(series_list: list[EnergyChartSeries]) -> dict[str, dict[str, float]]:
+    vehicle_states: dict[str, dict[str, float]] = {}
+    for series in series_list:
+        if not series.key.startswith("vehicle_") or not series.points:
+            continue
+        latest_point = max(series.points, key=lambda point: point.timestamp)
+        if latest_point.value is None:
+            continue
+        if series.label.endswith(" SoC"):
+            vehicle_name = series.label.removesuffix(" SoC")
+            vehicle_states.setdefault(vehicle_name, {})["battery_level"] = float(latest_point.value)
+        elif series.label.endswith(" charge rate"):
+            vehicle_name = series.label.removesuffix(" charge rate")
+            vehicle_states.setdefault(vehicle_name, {})["charge_power_kw"] = float(latest_point.value)
+    return vehicle_states
+
+
+def _merge_teslamate_vehicle_fallbacks(
+    vehicles: list[VehicleStatus],
+    teslamate_series: list[EnergyChartSeries],
+) -> list[VehicleStatus]:
+    teslamate_fallbacks = _build_teslamate_vehicle_fallbacks(teslamate_series)
+    if not teslamate_fallbacks:
+        return vehicles
+
+    merged_vehicles: list[VehicleStatus] = []
+    seen_names: set[str] = set()
+    for vehicle in vehicles:
+        fallback = teslamate_fallbacks.get(vehicle.name)
+        if fallback:
+            seen_names.add(vehicle.name)
+            if vehicle.battery_level is None and fallback.get("battery_level") is not None:
+                vehicle.battery_level = round(fallback["battery_level"])
+            if vehicle.charge_power_kw is None and fallback.get("charge_power_kw") is not None:
+                vehicle.charge_power_kw = round(fallback["charge_power_kw"], 2)
+        merged_vehicles.append(vehicle)
+
+    for vehicle_name, fallback in teslamate_fallbacks.items():
+        if vehicle_name in seen_names:
+            continue
+        merged_vehicles.append(
+            VehicleStatus(
+                name=vehicle_name,
+                source="Tesla Vehicle",
+                battery_level=round(fallback["battery_level"]) if fallback.get("battery_level") is not None else None,
+                charging_state="Last known",
+                charge_power_kw=round(fallback["charge_power_kw"], 2) if fallback.get("charge_power_kw") is not None else None,
+            )
+        )
+    return merged_vehicles
+
+
 async def _load_non_tesla_snapshots(settings: Settings):
     cache_key = _build_non_tesla_cache_key(settings)
     cached_snapshots = _get_cached_non_tesla_snapshots(cache_key)
@@ -240,6 +292,7 @@ async def build_dashboard_data(settings: Settings) -> DashboardData:
         preferred_vehicle_names=preferred_vehicle_names,
     )
     notes.extend(teslamate_notes)
+    vehicles = _merge_teslamate_vehicle_fallbacks(vehicles, teslamate_series)
 
     dashboard = DashboardData(
         site_name=settings.dashboard_title,
