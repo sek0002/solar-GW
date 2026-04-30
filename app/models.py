@@ -155,6 +155,7 @@ class DashboardData(BaseModel):
     power_flow: PowerFlow = Field(default_factory=PowerFlow)
     summary_metrics: list[SummaryMetric] = Field(default_factory=list)
     energy_chart: list[EnergyChartSeries] = Field(default_factory=list)
+    vehicle_chart: list[EnergyChartSeries] = Field(default_factory=list)
     automation_panel: AutomationPanel = Field(default_factory=AutomationPanel)
     batteries: list[BatteryStatus] = Field(default_factory=list)
     chargers: list[ChargerStatus] = Field(default_factory=list)

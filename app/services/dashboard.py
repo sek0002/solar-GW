@@ -114,6 +114,16 @@ def _merge_teslamate_vehicle_fallbacks(
     return merged_vehicles
 
 
+def _build_vehicle_chart_series(
+    base_series: list[EnergyChartSeries],
+    teslamate_series: list[EnergyChartSeries],
+) -> list[EnergyChartSeries]:
+    teslamate_vehicle_series = [series for series in teslamate_series if series.key.startswith("vehicle_")]
+    if teslamate_vehicle_series:
+        return teslamate_vehicle_series
+    return [series for series in base_series if series.key.startswith("vehicle_")]
+
+
 async def _load_non_tesla_snapshots(settings: Settings):
     cache_key = _build_non_tesla_cache_key(settings)
     cached_snapshots = _get_cached_non_tesla_snapshots(cache_key)
@@ -299,6 +309,7 @@ async def build_dashboard_data(settings: Settings) -> DashboardData:
     )
     notes.extend(teslamate_card_notes)
     vehicles = _merge_teslamate_vehicle_fallbacks(vehicles, teslamate_series)
+    vehicle_chart = _build_vehicle_chart_series(persisted_energy_chart or live_energy_chart, teslamate_series)
 
     dashboard = DashboardData(
         site_name=settings.dashboard_title,
@@ -306,6 +317,7 @@ async def build_dashboard_data(settings: Settings) -> DashboardData:
         power_flow=power_flow,
         summary_metrics=metrics,
         energy_chart=(persisted_energy_chart or live_energy_chart) + teslamate_series,
+        vehicle_chart=vehicle_chart,
         batteries=batteries,
         chargers=chargers,
         plants=plants,

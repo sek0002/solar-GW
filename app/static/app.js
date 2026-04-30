@@ -1596,6 +1596,7 @@ function renderVehicleChart() {
 
 function renderDashboard(data) {
   mergeEnergySeries(data.energy_chart || []);
+  mergeEnergySeries(data.vehicle_chart || []);
   const displayVehicles = hydrateTeslaVehicles(data.vehicles || []);
   const timestamp = data.updated_at || new Date().toISOString();
   appendConnectedSourceContinuityPoints(data, timestamp);
