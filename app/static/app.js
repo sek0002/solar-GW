@@ -836,7 +836,7 @@ function renderTeslaMateCards(cards) {
 
       const mapId = `teslamate-map-${index}`;
       const mapMarkup = Number.isFinite(card.latitude) && Number.isFinite(card.longitude)
-        ? `<div class="teslamate-summary-map-frame" id="${mapId}" data-lat="${card.latitude}" data-lng="${card.longitude}" data-name="${card.name}"></div>`
+        ? `<div class="teslamate-summary-map-frame" id="${mapId}" data-lat="${card.latitude}" data-lng="${card.longitude}" data-name="${card.name}" data-embed-url="${card.map_embed_url || ""}"></div>`
         : `<div class="teslamate-summary-map-fallback"><strong>${card.name}</strong><span>Location unavailable</span></div>`;
 
       return `
@@ -863,30 +863,64 @@ function renderTeslaMateCards(cards) {
   initializeTeslaMateMaps();
 }
 
+function renderTeslaMateMapFallback(node) {
+  const embedUrl = node.dataset.embedUrl;
+  const name = node.dataset.name || "Vehicle map";
+  if (!embedUrl) {
+    node.innerHTML = `
+      <div class="teslamate-summary-map-fallback">
+        <strong>${name}</strong>
+        <span>Map unavailable</span>
+      </div>
+    `;
+    return;
+  }
+  node.innerHTML = `
+    <iframe
+      class="teslamate-summary-map-embed"
+      src="${embedUrl}"
+      title="${name} map"
+      loading="lazy"
+      referrerpolicy="no-referrer-when-downgrade"
+    ></iframe>
+  `;
+}
+
 function initializeTeslaMateMaps() {
-  if (!window.L) return;
-  document.querySelectorAll(".teslamate-summary-map-frame[data-lat][data-lng]").forEach((node) => {
+  const nodes = document.querySelectorAll(".teslamate-summary-map-frame[data-lat][data-lng]");
+  if (!nodes.length) return;
+  if (!window.L) {
+    nodes.forEach((node) => renderTeslaMateMapFallback(node));
+    return;
+  }
+  nodes.forEach((node) => {
     const lat = Number(node.dataset.lat);
     const lng = Number(node.dataset.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-    const map = window.L.map(node, {
-      zoomControl: true,
-      attributionControl: true,
-      dragging: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-      tap: false,
-      touchZoom: false,
-    });
-    window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
-    map.setView([lat, lng], 17);
-    window.L.marker([lat, lng]).addTo(map);
-    teslaMateMaps.set(node.id, map);
+    try {
+      const map = window.L.map(node, {
+        zoomControl: true,
+        attributionControl: true,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false,
+        tap: false,
+        touchZoom: false,
+      });
+      window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(map);
+      map.setView([lat, lng], 17);
+      window.L.marker([lat, lng]).addTo(map);
+      teslaMateMaps.set(node.id, map);
+      window.requestAnimationFrame(() => map.invalidateSize());
+      window.setTimeout(() => map.invalidateSize(), 200);
+    } catch (_error) {
+      renderTeslaMateMapFallback(node);
+    }
   });
 }
 

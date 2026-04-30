@@ -937,6 +937,13 @@ h3 {
   gap: 16px;
 }
 
+@media (min-width: 1280px) {
+  .teslamate-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+}
+
 .teslamate-summary-card {
   display: grid;
   overflow: hidden;
@@ -956,6 +963,7 @@ h3 {
   min-height: 220px;
   border: 0;
   background: #10131a;
+  overflow: hidden;
 }
 
 .teslamate-summary-map-frame .leaflet-tile-pane,
@@ -965,8 +973,17 @@ h3 {
   filter: grayscale(1) brightness(0.62) contrast(1.25);
 }
 
-.teslamate-summary-map-frame .leaflet-container {
+.teslamate-summary-map-frame.leaflet-container {
   background: #10131a;
+}
+
+.teslamate-summary-map-embed {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  border: 0;
+  background: #10131a;
+  filter: grayscale(1) brightness(0.72) contrast(1.15);
 }
 
 .teslamate-summary-map-frame .leaflet-control-zoom a {
