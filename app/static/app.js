@@ -973,7 +973,7 @@ function initializeTeslaMateMaps() {
   });
 }
 
-function renderSources(sources, vehicles, chargers, powerFlow) {
+function renderSources(sources, vehicles, chargers, batteries, powerFlow) {
   const root = document.getElementById("provider-strip");
   if (!root) return;
   const providerLabelMap = {
@@ -982,6 +982,7 @@ function renderSources(sources, vehicles, chargers, powerFlow) {
     "Growatt Hybrid": "Battery",
   };
   const wallCharger = (chargers || []).find((charger) => charger.source === "Tesla Charging");
+  const growattBattery = (batteries || []).find((battery) => battery.source === "Growatt Hybrid");
   const totalVehicleAmps = (vehicles || [])
     .filter((vehicle) => vehicle.source === "Tesla Vehicle")
     .reduce((sum, vehicle) => sum + (Number(vehicle.charge_current_a) || 0), 0);
@@ -995,7 +996,10 @@ function renderSources(sources, vehicles, chargers, powerFlow) {
       : growattDischargeKw > 0
         ? -growattDischargeKw
         : 0;
-  const growattSocPct = getLatestSeriesValue("growatt_soc_pct");
+  const growattSocPct = Number.isFinite(Number(growattBattery?.state_of_charge))
+    ? Number(growattBattery.state_of_charge)
+    : getLatestSeriesValue("growatt_soc_pct");
+  const currentSolarKw = Math.max(0, Number(powerFlow?.solar_kw) || 0);
 
   const providerMarkup = sources
     .map((source) => {
@@ -1020,7 +1024,7 @@ function renderSources(sources, vehicles, chargers, powerFlow) {
           plain: true,
         });
       } else if (source.name === "GoodWe") {
-        const solarKw = getLatestSeriesValue("solar_input_kw");
+        const solarKw = currentSolarKw || getLatestSeriesValue("solar_input_kw");
         metric = Number.isFinite(solarKw) && solarKw > 0
           ? `<span class="status-metric status-metric-good status-metric-plain" title="Solar input">${formatInlineMetric(solarKw, "kW", solarKw < 10 ? 1 : 0)}</span>`
           : "";
@@ -1664,7 +1668,7 @@ function renderDashboard(data) {
   renderVehicles(displayVehicles);
   renderTeslaMateCards(data.teslamate_cards || []);
   renderBatteryRail(displayVehicles, data.batteries || [], data.power_flow || {});
-  renderSources(data.sources || [], displayVehicles, data.chargers || [], data.power_flow || {});
+  renderSources(data.sources || [], displayVehicles, data.chargers || [], data.batteries || [], data.power_flow || {});
   renderUpdatedAt(data.updated_at);
 }
 
