@@ -7,9 +7,8 @@ import httpx
 
 from app.config import Settings, parse_csv
 from app.models import AutomationPanel
-from app.services.automation_state import clamp_amps, load_persisted_state
+from app.services.automation_state import clamp_amps
 from app.services.tesla_oauth import get_valid_access_token
-from app.services.teslamate import load_teslamate_dashboard_cards
 
 MIN_VEHICLE_AMPS = 5
 MAX_VEHICLE_AMPS = 30
@@ -81,36 +80,8 @@ async def _discover_controllable_vehicles(
     vins: list[str],
     token: str,
     notes: list[str],
-    *,
-    allow_wake: bool,
 ) -> list[dict[str, str]]:
     controllable: list[dict[str, str]] = []
-    if not allow_wake:
-        teslamate_cards, teslamate_notes = load_teslamate_dashboard_cards(settings)
-        notes.extend(teslamate_notes)
-        cards_by_vin = {
-            card.vin: card
-            for card in teslamate_cards
-            if card.vin
-        }
-        for vin in vins:
-            card = cards_by_vin.get(vin)
-            vehicle_name = (card.name if card else None) or vin[-6:]
-            if not card:
-                notes.append(f"Data-saver skipped Tesla lookup for {vehicle_name}; no TeslaMate state was available.")
-                continue
-            status_name = str(card.status or "unknown").lower()
-            if card.plugged_in is True or (card.charger_power_kw or 0) > 0 or status_name in {"charging", "complete", "stopped"}:
-                controllable.append(
-                    {
-                        "vin": vin,
-                        "name": vehicle_name,
-                    }
-                )
-                continue
-            notes.append(f"{vehicle_name} is not marked plugged in by TeslaMate while Data-saver is on.")
-        return controllable
-
     for vin in vins:
         try:
             meta_payload = await _get_json(client, f"{settings.tesla_api_base_url}/api/1/vehicles/{vin}", token)
@@ -122,28 +93,21 @@ async def _discover_controllable_vehicles(
         vehicle_name = meta.get("display_name") or vin[-6:]
         vehicle_state_name = str(meta.get("state", "unknown")).lower()
 
-        if vehicle_state_name in {"asleep", "offline"}:
-            if not allow_wake:
-                notes.append(f"Data-saver skipped wake-up for {vehicle_name} while it was {vehicle_state_name}.")
+        notes.append(f"Waking {vehicle_name} before sending charge commands.")
+        try:
+            await _post_command(
+                client,
+                f"{settings.tesla_api_base_url}/api/1/vehicles/{vin}/wake_up",
+                token,
+            )
+            meta, vehicle_state_name = await _wait_for_vehicle_online(client, settings, vin, token)
+            vehicle_name = (meta or {}).get("display_name") or vehicle_name
+            if vehicle_state_name != "online":
+                notes.append(f"{vehicle_name} did not come online after wake-up (state: {vehicle_state_name}).")
                 continue
-            notes.append(f"Waking {vehicle_name} from {vehicle_state_name}.")
-            try:
-                await _post_command(
-                    client,
-                    f"{settings.tesla_api_base_url}/api/1/vehicles/{vin}/wake_up",
-                    token,
-                )
-                meta, vehicle_state_name = await _wait_for_vehicle_online(client, settings, vin, token)
-                vehicle_name = (meta or {}).get("display_name") or vehicle_name
-                if vehicle_state_name != "online":
-                    notes.append(f"{vehicle_name} did not come online after wake-up (state: {vehicle_state_name}).")
-                    continue
-                notes.append(f"{vehicle_name} is online after wake-up.")
-            except httpx.HTTPError as exc:
-                notes.append(f"Wake-up failed for {vehicle_name}: {exc}")
-                continue
-        elif vehicle_state_name != "online":
-            notes.append(f"{vehicle_name} is {vehicle_state_name}; skipping charge command.")
+            notes.append(f"{vehicle_name} is online after wake-up.")
+        except httpx.HTTPError as exc:
+            notes.append(f"Wake-up failed for {vehicle_name}: {exc}")
             continue
 
         try:
@@ -202,7 +166,6 @@ async def _apply_charge_target(settings: Settings, target_amps: int | None, deta
 
     timeout = httpx.Timeout(settings.request_timeout_seconds, connect=settings.request_timeout_seconds)
     notes: list[str] = []
-    allow_wake = not load_persisted_state().data_saver_enabled
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         controllable = await _discover_controllable_vehicles(
@@ -211,7 +174,6 @@ async def _apply_charge_target(settings: Settings, target_amps: int | None, deta
             vins,
             token,
             notes,
-            allow_wake=allow_wake,
         )
 
         if not controllable:
@@ -219,11 +181,7 @@ async def _apply_charge_target(settings: Settings, target_amps: int | None, deta
                 "applied": False,
                 "status": "idle" if requested_amps is None else "error",
                 "target_amps": requested_amps,
-                "detail": (
-                    "No plugged-in Tesla vehicles were available for charge control."
-                    if allow_wake
-                    else "No online plugged-in Tesla vehicles were available for charge control while Data-saver is on."
-                ),
+                "detail": "No plugged-in Tesla vehicles were available for charge control.",
                 "notes": notes,
             }
 
