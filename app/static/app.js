@@ -124,6 +124,12 @@ function getVehicleCacheKey(vehicle) {
   return vehicle.vin || vehicle.name;
 }
 
+function getVehicleIdentityKey(vehicle) {
+  return String(vehicle?.vin || vehicle?.name || "")
+    .trim()
+    .toLowerCase();
+}
+
 function getTeslaVehicleSeriesColor(vehicleKey) {
   const normalizedKey = String(vehicleKey || "tesla")
     .toLowerCase()
@@ -322,6 +328,17 @@ function hydrateTeslaVehicles(vehicles) {
     return merged;
   });
 
+  const liveTeslaIdentityKeys = new Set(
+    mergedVehicles
+      .filter((vehicle) => vehicle.source === "Tesla Vehicle")
+      .flatMap((vehicle) => {
+        const keys = [getVehicleIdentityKey(vehicle)];
+        if (vehicle?.name) {
+          keys.push(String(vehicle.name).trim().toLowerCase());
+        }
+        return keys.filter(Boolean);
+      }),
+  );
   const liveTeslaKeys = new Set(
     liveVehicles
       .filter((vehicle) => vehicle.source === "Tesla Vehicle")
@@ -329,7 +346,11 @@ function hydrateTeslaVehicles(vehicles) {
   );
 
   const staleVehicles = Array.from(lastKnownTeslaVehicles.entries())
-    .filter(([key]) => !liveTeslaKeys.has(key))
+    .filter(([key, vehicle]) => {
+      if (liveTeslaKeys.has(key)) return false;
+      const identityKey = getVehicleIdentityKey(vehicle);
+      return !liveTeslaIdentityKeys.has(identityKey);
+    })
     .map(([, vehicle]) => ({
       ...vehicle,
       stale: true,
@@ -340,10 +361,24 @@ function hydrateTeslaVehicles(vehicles) {
     saveTeslaVehicleCache();
   }
 
-  return [
-    ...mergedVehicles,
-    ...staleVehicles,
-  ];
+  const dedupedVehicles = [];
+  const seenTeslaIdentityKeys = new Set();
+  for (const vehicle of [...mergedVehicles, ...staleVehicles]) {
+    if (vehicle.source !== "Tesla Vehicle") {
+      dedupedVehicles.push(vehicle);
+      continue;
+    }
+    const identityKey = getVehicleIdentityKey(vehicle);
+    if (identityKey && seenTeslaIdentityKeys.has(identityKey)) {
+      continue;
+    }
+    if (identityKey) {
+      seenTeslaIdentityKeys.add(identityKey);
+    }
+    dedupedVehicles.push(vehicle);
+  }
+
+  return dedupedVehicles;
 }
 
 function appendDisconnectedSourcePoints(data, timestamp) {
@@ -403,11 +438,12 @@ function appendTeslaVehicleFallbackPoints(vehicles, timestamp) {
           { label: `${vehicle.name} SoC`, unit: "%", color: vehicleColor, axis: "percent" },
         );
       }
-      if (vehicle.charge_power_kw !== null && vehicle.charge_power_kw !== undefined) {
+      const effectiveChargeKw = getLatestTeslaVehicleChargeKw(vehicle);
+      if (effectiveChargeKw !== null && effectiveChargeKw !== undefined) {
         appendChartPointWithCarryForward(
           chargeKey,
           timestamp,
-          Number(vehicle.charge_power_kw),
+          Number(effectiveChargeKw),
           { label: `${vehicle.name} charge rate`, unit: "kW", color: vehicleColor, axis: "power" },
         );
       }
@@ -518,7 +554,19 @@ function getLatestTeslaVehicleSoc(vehicle) {
   return null;
 }
 
+function isTeslaVehicleNotCharging(vehicle) {
+  const state = String(vehicle?.charging_state || "").toLowerCase();
+  const amps = Number(vehicle?.charge_current_a);
+  if (Number.isFinite(amps) && amps > 0) {
+    return false;
+  }
+  return ["stopped", "complete", "disconnected", "offline", "not_charging", "last known"].includes(state);
+}
+
 function getLatestTeslaVehicleChargeKw(vehicle) {
+  if (isTeslaVehicleNotCharging(vehicle)) {
+    return 0;
+  }
   const vehicleKey = vehicle?.name || vehicle?.vin || "tesla";
   const seriesValue = getLatestSeriesValue(getTeslaVehicleSeriesKey(vehicleKey, "charge_kw"));
   if (Number.isFinite(seriesValue) && seriesValue >= 0) {
@@ -720,9 +768,10 @@ function renderVehicles(vehicles) {
   const root = document.getElementById("vehicles");
   root.innerHTML = vehicles
     .map((vehicle) => {
+      const chargeKw = getLatestTeslaVehicleChargeKw(vehicle);
       const chargeMetric = getChargeSpeedMarkup({
         amps: Number(vehicle.charge_current_a),
-        kw: Number(vehicle.charge_power_kw),
+        kw: Number(chargeKw),
         label: `${vehicle.name} charge speed`,
         accent: "accent",
       });
@@ -740,7 +789,7 @@ function renderVehicles(vehicles) {
             <span>${vehicle.stale ? `Last known ${vehicle.charging_state || "Unknown"}` : vehicle.charging_state || "Unknown"}</span>
           </div>
           <div class="entity-secondary">
-            <span>Charge rate: ${formatValue(vehicle.charge_power_kw, "kW")}</span>
+            <span>Charge rate: ${formatValue(chargeKw, "kW")}</span>
             <span>Range: ${formatValue(vehicle.range_km, "km")}</span>
             <span>Plugged in: ${vehicle.plugged_in ? "Yes" : "No"}</span>
             <span>Location: ${vehicle.location || "Unknown"}</span>
