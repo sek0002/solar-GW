@@ -44,6 +44,9 @@ class PersistedAutomationState(BaseModel):
     )
     manual_charge: PersistedManualCharge = Field(default_factory=PersistedManualCharge)
     last_applied_signature: str | None = None
+    last_applied_mode: str | None = None
+    last_applied_target_amps: int | None = None
+    last_applied_vehicle_count: int = 0
     last_stop_check_signature: str | None = None
     last_stop_check_at: str | None = None
 
@@ -167,12 +170,27 @@ def automation_signature(panel: AutomationPanel) -> str:
 
 def should_apply_automation(panel: AutomationPanel) -> bool:
     state = load_persisted_state()
-    return state.last_applied_signature != automation_signature(panel)
+    next_signature = automation_signature(panel)
+    if state.last_applied_signature == next_signature:
+        return False
+    if (
+        panel.effective_mode == "Solar match"
+        and state.last_applied_mode == "Solar match"
+        and panel.effective_target_amps is not None
+        and state.last_applied_target_amps is not None
+        and state.last_applied_vehicle_count == panel.tesla_charge_vehicle_count
+        and abs(panel.effective_target_amps - state.last_applied_target_amps) < 2
+    ):
+        return False
+    return True
 
 
 def mark_automation_applied(panel: AutomationPanel) -> PersistedAutomationState:
     state = load_persisted_state()
     state.last_applied_signature = automation_signature(panel)
+    state.last_applied_mode = panel.effective_mode
+    state.last_applied_target_amps = panel.effective_target_amps
+    state.last_applied_vehicle_count = panel.tesla_charge_vehicle_count
     save_persisted_state(state)
     return state
 
