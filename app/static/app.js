@@ -1024,7 +1024,7 @@ function renderSources(sources, vehicles, chargers, batteries, powerFlow) {
           plain: true,
         });
       } else if (source.name === "GoodWe") {
-        const solarKw = currentSolarKw || getLatestSeriesValue("solar_input_kw");
+        const solarKw = getLatestSeriesValue("solar_input_kw") || currentSolarKw;
         metric = Number.isFinite(solarKw) && solarKw > 0
           ? `<span class="status-metric status-metric-good status-metric-plain" title="Solar input">${formatInlineMetric(solarKw, "kW", solarKw < 10 ? 1 : 0)}</span>`
           : "";
