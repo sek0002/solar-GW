@@ -978,14 +978,9 @@ function renderSources(sources, vehicles, chargers, batteries, powerFlow) {
   if (!root) return;
   const providerLabelMap = {
     "GoodWe": "Solar",
-    "Tesla Charging": "Tesla Wall",
     "Growatt Hybrid": "Battery",
   };
-  const wallCharger = (chargers || []).find((charger) => charger.source === "Tesla Charging");
   const growattBattery = (batteries || []).find((battery) => battery.source === "Growatt Hybrid");
-  const totalVehicleAmps = (vehicles || [])
-    .filter((vehicle) => vehicle.source === "Tesla Vehicle")
-    .reduce((sum, vehicle) => sum + (Number(vehicle.charge_current_a) || 0), 0);
   const growattChargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_charge_kw"));
   const growattDischargeKw = Math.max(0, getLatestSeriesValue("growatt_battery_discharge_kw"));
   const liveBatteryKw = Number(powerFlow?.battery_kw);
@@ -1000,8 +995,10 @@ function renderSources(sources, vehicles, chargers, batteries, powerFlow) {
     ? Number(growattBattery.state_of_charge)
     : getLatestSeriesValue("growatt_soc_pct");
   const currentSolarKw = Math.max(0, Number(powerFlow?.solar_kw) || 0);
+  const goodWeSolarKw = getLatestSeriesValue("solar_input_kw");
 
   const providerMarkup = sources
+    .filter((source) => source.name !== "Tesla Charging")
     .map((source) => {
       let metric = "";
       if (source.name === "Growatt Hybrid") {
@@ -1015,16 +1012,8 @@ function renderSources(sources, vehicles, chargers, batteries, powerFlow) {
         metric = batteryParts.length
           ? `<span class="status-metric ${growattBatteryKw >= 0 ? "status-metric-accent" : "status-metric-warn"} status-metric-plain" title="Battery state">${batteryParts.join(" · ")}</span>`
           : "";
-      } else if (source.name === "Tesla Charging") {
-        metric = getChargeSpeedMarkup({
-          amps: totalVehicleAmps,
-          kw: Number(wallCharger?.power_kw),
-          label: "Tesla Wall live speed",
-          accent: "accent",
-          plain: true,
-        });
       } else if (source.name === "GoodWe") {
-        const solarKw = getLatestSeriesValue("solar_input_kw") || currentSolarKw;
+        const solarKw = Number.isFinite(goodWeSolarKw) ? goodWeSolarKw : currentSolarKw;
         metric = Number.isFinite(solarKw) && solarKw > 0
           ? `<span class="status-metric status-metric-good status-metric-plain" title="Solar input">${formatInlineMetric(solarKw, "kW", solarKw < 10 ? 1 : 0)}</span>`
           : "";
