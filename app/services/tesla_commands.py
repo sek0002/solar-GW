@@ -93,21 +93,25 @@ async def _discover_controllable_vehicles(
         vehicle_name = meta.get("display_name") or vin[-6:]
         vehicle_state_name = str(meta.get("state", "unknown")).lower()
 
-        notes.append(f"Waking {vehicle_name} before sending charge commands.")
-        try:
-            await _post_command(
-                client,
-                f"{settings.tesla_api_base_url}/api/1/vehicles/{vin}/wake_up",
-                token,
-            )
-            meta, vehicle_state_name = await _wait_for_vehicle_online(client, settings, vin, token)
-            vehicle_name = (meta or {}).get("display_name") or vehicle_name
-            if vehicle_state_name != "online":
-                notes.append(f"{vehicle_name} did not come online after wake-up (state: {vehicle_state_name}).")
+        if vehicle_state_name in {"asleep", "offline"}:
+            notes.append(f"Waking {vehicle_name} from {vehicle_state_name}.")
+            try:
+                await _post_command(
+                    client,
+                    f"{settings.tesla_api_base_url}/api/1/vehicles/{vin}/wake_up",
+                    token,
+                )
+                meta, vehicle_state_name = await _wait_for_vehicle_online(client, settings, vin, token)
+                vehicle_name = (meta or {}).get("display_name") or vehicle_name
+                if vehicle_state_name != "online":
+                    notes.append(f"{vehicle_name} did not come online after wake-up (state: {vehicle_state_name}).")
+                    continue
+                notes.append(f"{vehicle_name} is online after wake-up.")
+            except httpx.HTTPError as exc:
+                notes.append(f"Wake-up failed for {vehicle_name}: {exc}")
                 continue
-            notes.append(f"{vehicle_name} is online after wake-up.")
-        except httpx.HTTPError as exc:
-            notes.append(f"Wake-up failed for {vehicle_name}: {exc}")
+        elif vehicle_state_name != "online":
+            notes.append(f"{vehicle_name} is {vehicle_state_name}; skipping charge command.")
             continue
 
         try:
